@@ -255,6 +255,36 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .toast[hidden]{display:none}
 .bulk-box[hidden]{display:none}
 
+/* Pantry + what can I make */
+.p-add{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:8px}
+.p-chips{display:flex;flex-wrap:wrap;gap:8px}
+.p-sug{border:2px dashed var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:5px 12px;font-weight:600;font-size:14px;cursor:pointer}
+.p-sug:hover{background:var(--soft);border-style:solid}
+.p-item{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 5px 4px 12px;font-weight:600;font-size:14px}
+.p-item button{border:none;background:var(--soft);color:var(--ink);border-radius:50%;width:24px;height:24px;cursor:pointer;line-height:1;font-weight:800;padding:0;display:grid;place-items:center}
+.p-item button:hover{background:var(--danger);color:#fff}
+.p-group h3{font-size:19px;margin-bottom:8px}
+.p-check{display:flex;gap:10px;align-items:center;font-weight:600;cursor:pointer}
+.p-check input{width:20px;height:20px;accent-color:var(--lunch)}
+.cook-top{background:var(--breakfast);color:#17201A;border:2px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.cook-top h2{font-size:clamp(24px,4vw,34px);line-height:1.05}
+.cook-top p{margin:4px 0 0;font-weight:600}
+.cook-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.cook-card{border:2px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:3px 3px 0 var(--shadow);display:grid;grid-template-columns:96px 1fr;overflow:hidden;cursor:pointer;transition:transform .12s, box-shadow .12s}
+.cook-card:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--shadow)}
+.cook-card .cc-ph{border-right:2px solid var(--line);position:relative;min-height:96px}
+.cook-card .cc-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cook-card .cc-ph .art .letter{font-size:44px}
+.cook-card .cc-b{padding:10px 12px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.cook-card h4{font-size:17px;line-height:1.15}
+.cook-card .cc-m{font-size:13px;color:var(--muted)}
+.miss{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center}
+.miss .lbl{font-size:12px;font-weight:700;color:var(--muted)}
+.miss button{font-size:12px;font-weight:700;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:3px 9px;cursor:pointer}
+.miss button:hover{background:var(--lunch);color:#0E1A12}
+.have-tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-left:8px;white-space:nowrap}
+@media (max-width:560px){ .p-add{grid-template-columns:1fr auto} .p-add select{grid-column:1 / -1;grid-row:2} }
+
 /* Recommendations */
 .recs{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;margin-bottom:26px}
 .rec{border:2px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:4px 4px 0 var(--shadow);display:grid;grid-template-columns:150px 1fr;overflow:hidden}
@@ -321,6 +351,10 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
         <input id="q" type="search" placeholder="Search recipes or ingredients" aria-label="Search recipes or ingredients">
       </div>
       <span id="authBox" class="auth-box"></span>
+      <button class="btn" id="pantryBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M7 6h10v2a3 3 0 0 1 1 2.2V19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-8.8A3 3 0 0 1 7 8z"/><path d="M6 13h12"/></svg>
+        Pantry
+      </button>
       <button class="btn primary" id="newBtn" type="button">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         New recipe
@@ -332,6 +366,7 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 
   <div class="toolbar">
     <div class="left">
+      <button class="btn sm yolk" id="cookBtn" type="button">🍳 What can I make?</button>
       <button class="chip-toggle" id="favToggle" type="button" aria-pressed="false">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.2 0 3.6 1.2 5.2 3 1.6-1.8 3-3 5.2-3 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z"/></svg>
         Favorites
@@ -355,6 +390,8 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
   <main id="grid" class="grid" aria-live="polite"></main>
 </div>
 
+<div class="overlay" id="pantryOv" hidden><div class="sheet" id="pantrySheet" role="dialog" aria-modal="true" aria-labelledby="pTitle"></div></div>
+<div class="overlay" id="cookOv" hidden><div class="sheet" id="cookSheet" role="dialog" aria-modal="true" aria-labelledby="cTitle"></div></div>
 <div class="overlay" id="detailOv" hidden><div class="sheet" id="detail" role="dialog" aria-modal="true" aria-labelledby="dTitle"></div></div>
 <div class="overlay" id="formOv" hidden><div class="sheet" id="formSheet" role="dialog" aria-modal="true" aria-labelledby="fTitle"></div></div>
 <div class="overlay" id="confirmOv" hidden></div>
@@ -620,6 +657,7 @@ async function setSession(s){
   if (s){ try{ const { data } = await sb.rpc("am_i_admin"); state.isAdmin = !!data; }catch(e){} }
   renderAuth(); render();
   if (state.openId) renderDetail();
+  loadPantry();
 }
 
 async function init(){
@@ -828,6 +866,213 @@ function renderRecs(){
 }
 
 
+/* ---------- pantry ---------- */
+const P_KEY = "recipe-box-pantry";
+const P_CATS = ["Spices & seasonings", "Fridge & freezer", "Produce", "Pantry shelf", "Other"];
+const BASICS = ["salt", "pepper", "water"];
+const P_STAPLES = ["salt","black pepper","olive oil","vegetable oil","butter","eggs","milk","all-purpose flour","sugar","brown sugar","baking powder","baking soda","vanilla extract","garlic","onions","rice","pasta","soy sauce","honey","garlic powder","paprika","cumin","cinnamon","parmesan","lemons","chicken broth"];
+const P_GUESS = {
+  "Spices & seasonings": "salt, pepper, black pepper, paprika, smoked paprika, cumin, cinnamon, oregano, thyme, rosemary, sage, dill, nutmeg, turmeric, curry powder, cayenne, coriander, cardamom, allspice, bay leaf, seasoning, chili powder, garlic powder, onion powder, red pepper flakes, italian seasoning, taco seasoning, vanilla extract, extract, bouillon, everything bagel seasoning, garlic salt",
+  "Fridge & freezer": "milk, butter, egg, cheese, cheddar, mozzarella, parmesan, feta, ricotta, cream, sour cream, yogurt, chicken, beef, pork, bacon, sausage, turkey, ham, steak, fish, salmon, tuna steak, shrimp, tofu, mayo, mayonnaise, mustard, ketchup, tortilla, hot dog, heavy cream, cream cheese, frozen peas, frozen corn, ice cream, pie crust",
+  "Produce": "onion, garlic, lemon, lime, tomato, potato, sweet potato, carrot, celery, lettuce, romaine, spinach, kale, broccoli, cauliflower, bell pepper, jalapeno, avocado, apple, banana, berries, strawberries, blueberries, scallion, green onion, cilantro, parsley, basil, mint, ginger, cucumber, zucchini, mushroom, corn, cabbage, shallot",
+  "Pantry shelf": "flour, sugar, brown sugar, rice, pasta, spaghetti, noodles, oil, olive oil, vegetable oil, vinegar, soy sauce, honey, maple syrup, beans, chickpeas, lentils, broth, stock, chicken broth, oats, baking powder, baking soda, breadcrumbs, panko, nuts, peanut butter, cocoa, chocolate chips, cornstarch, tomato paste, crushed tomatoes, canned tomatoes, marinara, salsa, bread, cereal, crackers, coconut milk, gochujang, sriracha, hot sauce, tuna"
+};
+const P_DESC = new Set("fresh freshly chopped diced sliced minced grated ground dried large small medium whole drained rinsed shredded softened melted room temperature cup cups of the a an and or to taste optional finely roughly thinly cold warm hot boneless skinless extra virgin all purpose ripe peeled seeded cubed packed light dark heaping divided plus more for serving garnish about into piece pieces inch can cans jar package bag bunch handful clove cloves tbsp tsp lb lbs oz pinch dash stick sticks slice slices head heads".split(" "));
+function sing(w){
+  if (w.length > 4 && w.endsWith("ies")) return w.slice(0,-3) + "y";
+  if (w.length > 4 && /(oes|ches|shes|sses)$/.test(w)) return w.slice(0,-2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0,-1);
+  return w;
+}
+function coreTokens(s){
+  const first = String(s||"").toLowerCase().replace(/\([^)]*\)/g, " ").split(/,|\s[-–]\s/)[0];
+  const words = first.replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean).map(sing);
+  const kept = words.filter(w => !P_DESC.has(w));
+  return kept.length ? kept : words;
+}
+const pKey = name => coreTokens(name).join(" ");
+function guessCat(name){
+  const t = " " + coreTokens(name).join(" ") + " ";
+  let best = "Other", len = 0;
+  for (const [cat, words] of Object.entries(P_GUESS)){
+    for (const w of words.split(/,\s*/)){
+      const k = coreTokens(w).join(" ");
+      if (k && k.length > len && t.includes(" " + k + " ")){ best = cat; len = k.length; }
+    }
+  }
+  return best;
+}
+function loadPantryLocal(){
+  try{ const p = JSON.parse(localStorage.getItem(P_KEY) || "null"); if (p && Array.isArray(p.items)) return {items: p.items, basics: p.basics !== false}; }catch(e){}
+  return {items: [], basics: true};
+}
+function savePantryLocal(){ try{ localStorage.setItem(P_KEY, JSON.stringify(state.pantry)); }catch(e){} }
+state.pantry = loadPantryLocal();
+state.pantrySync = "local";
+let pantryTimer = null, pantryIdx = null;
+function pantryIndex(){
+  if (pantryIdx) return pantryIdx;
+  const names = state.pantry.items.map(i => i.name).concat(state.pantry.basics ? BASICS : []);
+  pantryIdx = names.map(coreTokens).filter(t => t.length);
+  return pantryIdx;
+}
+function inPantry(ing){
+  const t = coreTokens(ing.item);
+  if (!t.length) return false;
+  return pantryIndex().some(p => p.every(w => t.includes(w)) || t.every(w => p.includes(w)));
+}
+const pantryUid = () => state.session && state.session.user && state.session.user.id;
+async function loadPantry(){
+  if (state.mode !== "db" || !pantryUid()){ state.pantrySync = "local"; renderPantryIfOpen(); return; }
+  try{
+    const { data, error } = await sb.from("pantries").select("data").eq("user_id", pantryUid()).maybeSingle();
+    if (error) throw error;
+    const remote = data && data.data;
+    if (remote && Array.isArray(remote.items)){
+      state.pantry = {items: remote.items, basics: remote.basics !== false};
+      state.pantrySync = "synced";
+    } else {
+      state.pantrySync = "synced";
+      if (state.pantry.items.length) await pushPantry();
+    }
+    savePantryLocal();
+  }catch(e){
+    const msg = String((e && (e.message || e.code)) || "");
+    state.pantrySync = /pantries|relation|schema cache|42P01|PGRST20/i.test(msg) ? "missing" : "error";
+  }
+  pantryIdx = null; renderPantryIfOpen();
+}
+async function pushPantry(){
+  const { error } = await sb.from("pantries").upsert({user_id: pantryUid(), data: state.pantry, updated_at: new Date().toISOString()}, {onConflict: "user_id"});
+  if (error) throw error;
+}
+function savePantry(){
+  pantryIdx = null;
+  savePantryLocal();
+  if (state.pantrySync !== "synced" || !pantryUid()) return;
+  clearTimeout(pantryTimer);
+  pantryTimer = setTimeout(() => { pushPantry().catch(() => toast("Couldn't sync your pantry just now. It's saved on this device.")); }, 600);
+}
+function addToPantry(names, cat){
+  const have = new Set(state.pantry.items.map(i => pKey(i.name)));
+  let added = 0;
+  names.map(n => String(n||"").trim().replace(/\s+/g, " ")).filter(Boolean).forEach(name => {
+    const k = pKey(name);
+    if (!k || have.has(k)) return;
+    have.add(k); added++;
+    state.pantry.items.push({name, cat: cat || guessCat(name)});
+  });
+  if (added) savePantry();
+  return added;
+}
+function removeFromPantry(key){
+  state.pantry.items = state.pantry.items.filter(i => pKey(i.name) !== key);
+  savePantry();
+}
+function recipeSuggestions(){
+  const have = new Set(state.pantry.items.map(i => pKey(i.name)));
+  const count = new Map();
+  state.recipes.forEach(r => allIngredients(r).forEach(i => {
+    const name = String(i.item||"").split(",")[0].replace(/\([^)]*\)/g, "").trim().toLowerCase();
+    const k = pKey(name);
+    if (!k || have.has(k) || k.split(" ").length > 4 || inPantry(i)) return;
+    const c = count.get(k) || {name, n:0}; c.n++; count.set(k, c);
+  }));
+  return [...count.values()].sort((a,b) => b.n - a.n || a.name.localeCompare(b.name)).map(c => c.name);
+}
+function syncNote(){
+  if (state.mode !== "db") return "Saved in this browser.";
+  if (!state.session) return "Saved on this device. Sign in to keep your pantry on all your devices.";
+  if (state.pantrySync === "synced") return "Synced to your account, so it's the same on your phone and computer.";
+  if (state.pantrySync === "missing") return "Saved on this device for now. (Syncing turns on once the pantry table is added in Supabase.)";
+  if (state.pantrySync === "error") return "Saved on this device. Couldn't reach your account just now.";
+  return "Loading your pantry…";
+}
+function openPantry(){
+  renderPantry();
+  $("#pantryOv").hidden = false; document.body.style.overflow = "hidden";
+  setTimeout(() => { const n = $("#p-name"); if (n && window.matchMedia("(min-width:700px)").matches) n.focus(); }, 50);
+}
+function closePantry(){ $("#pantryOv").hidden = true; restoreScroll(); }
+function renderPantryIfOpen(){ if (!$("#pantryOv").hidden) renderPantry(); if (!$("#cookOv").hidden) renderCook(); if (state.openId) renderDetail(); }
+function restoreScroll(){ if (["#pantryOv","#cookOv","#detailOv","#formOv"].every(s => $(s).hidden)) document.body.style.overflow = ""; }
+function renderPantry(){
+  const items = state.pantry.items;
+  const groups = P_CATS.map(cat => ({cat, list: items.filter(i => (P_CATS.includes(i.cat) ? i.cat : "Other") === cat).sort((a,b) => a.name.localeCompare(b.name))})).filter(g => g.list.length);
+  const fromRecipes = recipeSuggestions().slice(0, 14);
+  const haveKeys = new Set(items.map(i => pKey(i.name)));
+  const staples = P_STAPLES.filter(n => !haveKeys.has(pKey(n)) && !fromRecipes.some(f => pKey(f) === pKey(n))).slice(0, 14);
+  const allSug = [...new Set(state.recipes.flatMap(r => allIngredients(r).map(i => String(i.item||"").split(",")[0].trim().toLowerCase())).filter(Boolean))].sort();
+  const sugChip = n => '<button class="p-sug" type="button" data-padd="' + esc(n) + '">+ ' + esc(n) + '</button>';
+  $("#pantrySheet").innerHTML =
+    '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="pclose" aria-label="Close">' + ICON.close + '</button>' +
+    '<div class="acts"><button class="btn sm yolk" type="button" data-act="cook">🍳 What can I make?</button></div></div>' +
+    '<div class="form">' +
+      '<div><h2 id="pTitle">What\'s in my pantry</h2><p class="hint" style="margin:6px 0 0">' + esc(syncNote()) + '</p></div>' +
+      '<form class="p-add" id="pantryAdd" autocomplete="off">' +
+        '<input class="inp" id="p-name" list="pList" placeholder="Add an item, like cumin or eggs" aria-label="Pantry item">' +
+        '<select class="inp" id="p-cat" aria-label="Where it goes"><option value="">Sort it for me</option>' + P_CATS.map(c => '<option>' + esc(c) + '</option>').join("") + '</select>' +
+        '<button class="btn primary" type="submit">Add</button></form>' +
+      '<datalist id="pList">' + allSug.map(n => '<option value="' + esc(n) + '"></option>').join("") + '</datalist>' +
+      '<div class="ing-block" style="margin-top:-8px"><button class="btn sm ghost" type="button" data-act="bulk">Paste a list</button>' +
+        '<div hidden class="field bulk-box" style="margin-top:8px"><textarea class="inp" id="p-bulk" rows="4" aria-label="Paste pantry items" placeholder="One per line or separated by commas, like:&#10;cumin, paprika, oregano&#10;eggs"></textarea><div><button class="btn yolk sm" type="button" data-act="p-bulk-add">Add these</button></div></div></div>' +
+      (fromRecipes.length ? '<div class="field"><span class="lab">Used in your recipes <span class="hint">Tap anything you have.</span></span><div class="p-chips">' + fromRecipes.map(sugChip).join("") + '</div></div>' : "") +
+      (staples.length ? '<div class="field"><span class="lab">Common staples</span><div class="p-chips">' + staples.map(sugChip).join("") + '</div></div>' : "") +
+      '<label class="p-check"><input type="checkbox" id="p-basics"' + (state.pantry.basics ? " checked" : "") + '> Always count salt, pepper and water as things I have</label>' +
+      '<div style="display:flex;flex-direction:column;gap:18px;border-top:2px solid var(--line);padding-top:18px">' +
+        (groups.length ? groups.map(g => '<div class="p-group"><h3>' + esc(g.cat) + ' <span class="hint">(' + g.list.length + ')</span></h3><div class="p-chips">' +
+          g.list.map(i => '<span class="p-item">' + esc(i.name) + '<button type="button" data-pdel="' + esc(pKey(i.name)) + '" aria-label="Remove ' + esc(i.name) + '">×</button></span>').join("") + '</div></div>').join("")
+        : '<p class="hint" style="margin:0">Your pantry is empty. Add what you have on hand, then tap <b>What can I make?</b> to see which recipes you can cook today.</p>') +
+      '</div>' +
+      (items.length ? '<div class="form-foot"><span class="hint" style="margin-right:auto;align-self:center">' + items.length + (items.length === 1 ? " item" : " items") + '</span><button class="btn sm ghost" type="button" data-act="p-clear">Empty the pantry</button></div>' : "") +
+    '</div>';
+}
+
+/* What can I make? */
+function cookMatches(){
+  const ready = [], almost = [];
+  state.recipes.forEach(r => {
+    const need = allIngredients(r).filter(i => String(i.item||"").trim() && !/optional/i.test(i.item + " " + (i.qty||"")));
+    if (!need.length) return;
+    const missing = need.filter(i => !inPantry(i));
+    if (!missing.length) ready.push({r, n: need.length});
+    else if (missing.length <= 2 && need.length >= 3) almost.push({r, n: need.length, missing});
+  });
+  ready.sort((a,b) => String(a.r.title).localeCompare(String(b.r.title)));
+  almost.sort((a,b) => a.missing.length - b.missing.length || b.n - a.n);
+  return {ready, almost};
+}
+function openCook(){
+  if (!state.pantry.items.length){ openPantry(); toast("Add a few things to your pantry first."); return; }
+  renderCook();
+  $("#cookOv").hidden = false; document.body.style.overflow = "hidden";
+}
+function closeCook(){ $("#cookOv").hidden = true; restoreScroll(); }
+function cookCard(m){
+  const r = m.r;
+  return '<article class="cook-card" tabindex="0" role="button" data-open="' + esc(r.id) + '" aria-label="Open ' + esc(r.title) + '">' +
+    '<div class="cc-ph">' + photoHtml(r, "") + '</div><div class="cc-b">' +
+      '<span class="pill ' + esc(r.meal) + '" style="font-size:10px;padding:2px 8px">' + esc(MEALS[r.meal] ? MEALS[r.meal].label : r.meal) + '</span>' +
+      '<h4>' + esc(r.title || "Untitled") + '</h4>' +
+      (m.missing ? '<div class="miss"><span class="lbl">Need:</span>' + m.missing.map(i => '<button type="button" data-padd="' + esc(String(i.item).split(",")[0].trim()) + '" title="Tap if you actually have it">' + esc(String(i.item).split(",")[0].trim()) + ' · I have it</button>').join("") + '</div>'
+        : '<span class="cc-m">You have all ' + m.n + ' ingredients' + (totalMin(r) ? ' · ' + fmtMin(totalMin(r)) : "") + '</span>') +
+    '</div></article>';
+}
+function renderCook(){
+  const {ready, almost} = cookMatches();
+  const n = ready.length;
+  $("#cookSheet").innerHTML =
+    '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="cclose" aria-label="Close">' + ICON.close + '</button>' +
+    '<div class="acts"><button class="btn sm" type="button" data-act="pantry">Edit pantry</button></div></div>' +
+    '<div class="form">' +
+      '<div class="cook-top"><div><h2 id="cTitle">' + (n ? "You can make " + n + (n === 1 ? " recipe" : " recipes") + " today!" : "Nothing's fully stocked yet") + '</h2>' +
+        '<p>' + (n ? "Based on the " + state.pantry.items.length + " things in your pantry." : almost.length ? "But you're close on a few. See what you'd need below." : "Add more to your pantry and check again.") + '</p></div>' +
+        (n > 1 ? '<button class="btn primary" type="button" data-act="surprise">🎲 Surprise me</button>' : "") + '</div>' +
+      (n ? '<section><h3 style="font-size:22px;margin-bottom:10px">Ready to make</h3><div class="cook-list">' + ready.map(cookCard).join("") + '</div></section>' : "") +
+      (almost.length ? '<section><h3 style="font-size:22px;margin-bottom:4px">Almost there</h3><p class="hint" style="margin:0 0 10px">Missing just one or two things. Tap one if you actually have it and it\'ll go in your pantry.</p><div class="cook-list">' + almost.map(cookCard).join("") + '</div></section>' : "") +
+    '</div>';
+}
+
 function render(){
   renderTabs();
   renderBy();
@@ -882,7 +1127,7 @@ function openDetail(id){
 function closeDetail(){
   state.openId = null;
   $("#detailOv").hidden = true;
-  document.body.style.overflow = "";
+  restoreScroll();
   if (location.hash) { try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){ location.hash = ""; } }
 }
 function routeFromHash(){
@@ -956,6 +1201,7 @@ function renderDetail(){
   const srcName = r.sourceName || (src ? domainOf(src) : "");
   const parts = partsOf(r), multi = parts.length > 1;
   const anyIng = parts.some(p => p.ingredients.length), anySteps = parts.some(p => p.steps.length);
+  const showHave = state.pantry.items.length > 0;
   el.innerHTML =
     '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="close" aria-label="Close">' + ICON.close + '</button>' +
     '<div class="acts">' +
@@ -988,7 +1234,7 @@ function renderDetail(){
               const u = safeUrl(ing.url);
               const item = u ? '<a class="ing-link" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(ing.item) + ICON.ext + '</a>' : esc(ing.item);
               const done = state.checkedIng.has(key);
-              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleQty(ing.qty, f)) + '</span> ' : "") + item + '</span></li>';
+              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleQty(ing.qty, f)) + '</span> ' : "") + item + (showHave && inPantry(ing) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
             }).join("") + '</ul>').join("") +
           (!anyIng ? '<p class="hint">No ingredients yet.</p>' : "") +
         '</section>' +
@@ -1026,7 +1272,7 @@ function closeForm(){
   if (draft && draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview);
   if (draft && draft._videoPreview) URL.revokeObjectURL(draft._videoPreview);
   draft = null; $("#formOv").hidden = true;
-  if ($("#detailOv").hidden) document.body.style.overflow = "";
+  restoreScroll();
 }
 function ingRow(ing){
   return '<div class="ing-row"><input class="inp" placeholder="1 cup" value="' + esc(ing.qty) + '" data-k="qty" aria-label="Amount">' +
@@ -1261,6 +1507,10 @@ function toggleFav(id){
 
 document.addEventListener("click", async e => {
   const t = e.target;
+  const padd = t.closest("[data-padd]");
+  if (padd){ e.stopPropagation(); const n = padd.dataset.padd; if (addToPantry([n])) toast("Added " + n + " to your pantry."); renderPantryIfOpen(); return; }
+  const pdel = t.closest("[data-pdel]");
+  if (pdel){ removeFromPantry(pdel.dataset.pdel); renderPantryIfOpen(); return; }
   const fav = t.closest("[data-fav]");
   if (fav){ e.stopPropagation(); toggleFav(fav.dataset.fav); return; }
   const tab = t.closest(".tab");
@@ -1316,6 +1566,25 @@ document.addEventListener("click", async e => {
       break;
     }
     case "fclose": closeForm(); break;
+    case "pclose": closePantry(); break;
+    case "cclose": closeCook(); break;
+    case "cook": closePantry(); openCook(); break;
+    case "pantry": closeCook(); openPantry(); break;
+    case "surprise": {
+      const {ready} = cookMatches(); if (!ready.length) break;
+      openDetail(ready[Math.floor(Math.random() * ready.length)].r.id); break;
+    }
+    case "p-bulk-add": {
+      const names = $("#p-bulk").value.split(/[\r\n,;]+/);
+      const n = addToPantry(names);
+      toast(n ? "Added " + n + (n === 1 ? " item" : " items") + " to your pantry." : "Those are already in your pantry.");
+      renderPantry(); break;
+    }
+    case "p-clear":
+      if (await confirmBox("Empty your pantry?", "This removes all " + state.pantry.items.length + " items from your pantry. Your recipes aren't touched.", "Empty pantry")){
+        state.pantry.items = []; savePantry(); renderPantryIfOpen();
+      }
+      break;
     case "save": saveForm(); break;
     case "pick": $("#fileInp").click(); break;
     case "pick-video": $("#vidInp").click(); break;
@@ -1379,13 +1648,25 @@ document.addEventListener("click", async e => {
 
 document.addEventListener("change", e => {
   const c = e.target.closest("[data-ing]");
+  if (e.target.id === "p-basics"){ state.pantry.basics = e.target.checked; savePantry(); return; }
   if (c){ const i = c.dataset.ing; c.checked ? state.checkedIng.add(i) : state.checkedIng.delete(i); c.closest("li").classList.toggle("done", c.checked); }
 });
-document.addEventListener("submit", e => { if (e.target.id === "recipeForm"){ e.preventDefault(); saveForm(); } });
+document.addEventListener("submit", e => {
+  if (e.target.id === "recipeForm"){ e.preventDefault(); saveForm(); }
+  if (e.target.id === "pantryAdd"){
+    e.preventDefault();
+    const name = $("#p-name").value.trim(); if (!name) return;
+    const cat = $("#p-cat").value;
+    if (addToPantry([name], cat)){ renderPantry(); toast("Added " + name + "."); }
+    else toast(name + " is already in your pantry.");
+    const n = $("#p-name"); if (n){ n.value = ""; n.focus(); }
+  }
+});
 document.addEventListener("keydown", e => {
   if (e.key === "Escape"){
     if (!$("#confirmOv").hidden){ if ($("#authForm")){ $("#confirmOv").hidden = true; $("#confirmOv").innerHTML = ""; } return; }
     if (!$("#formOv").hidden) closeForm(); else if (!$("#detailOv").hidden) closeDetail();
+    else if (!$("#cookOv").hidden) closeCook(); else if (!$("#pantryOv").hidden) closePantry();
     return;
   }
   if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-open], [data-step], #drop")){ e.preventDefault(); e.target.click(); }
@@ -1401,6 +1682,10 @@ document.addEventListener("error", e => {
 
 $("#detailOv").addEventListener("click", e => { if (e.target.id === "detailOv") closeDetail(); });
 $("#formOv").addEventListener("click", e => { if (e.target.id === "formOv") closeForm(); });
+$("#pantryOv").addEventListener("click", e => { if (e.target.id === "pantryOv") closePantry(); });
+$("#cookOv").addEventListener("click", e => { if (e.target.id === "cookOv") closeCook(); });
+$("#pantryBtn").addEventListener("click", openPantry);
+$("#cookBtn").addEventListener("click", openCook);
 $("#q").addEventListener("input", e => { state.q = e.target.value; render(); });
 $("#favToggle").addEventListener("click", () => { state.favOnly = !state.favOnly; render(); });
 $("#sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
