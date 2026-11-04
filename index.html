@@ -200,6 +200,9 @@ select.sort{appearance:none;-webkit-appearance:none;height:38px;padding:0 38px 0
 .part-h{font-family:var(--display);font-size:18px;font-weight:800;margin:20px 0 6px;padding-bottom:4px;border-bottom:2px solid var(--line)}
 .part-h:first-child{margin-top:0}
 .steps + .part-h{margin-top:26px}
+.part-main{gap:14px}
+.total{border:2px solid var(--line);border-radius:18px;padding:18px 20px;background:var(--bg);scroll-margin-top:80px}
+.total .from{font-size:12px;color:var(--muted);font-weight:600;margin-left:8px;white-space:nowrap}
 .parts-note{margin:-6px 0 0;font-size:14px;color:var(--muted)}
 .part-box{border:2px solid var(--line);border-radius:16px;padding:16px;background:var(--bg);display:flex;flex-direction:column;gap:14px}
 .part-box .inp{background:var(--surface)}
@@ -436,8 +439,66 @@ function partsOf(r){
   return [{name: r.mainName || "", ingredients: r.ingredients || [], steps: r.steps || []}]
     .concat(extra.map(p => ({name: p.name || "", ingredients: p.ingredients || [], steps: p.steps || []})));
 }
-const partLabel = (p, i) => p.name || (i === 0 ? "Main" : "Part " + (i + 1));
+const partLabel = (p, i) => p.name || "Part " + (i + 1);
 const allIngredients = r => partsOf(r).flatMap(p => p.ingredients);
+/* Total ingredients: every part combined into one shopping list, with matching items added together. */
+const UNIT_ALIASES = {tbsp:["tbsp","tbsps","tbs","tablespoon","tablespoons","tbl"], tsp:["tsp","tsps","teaspoon","teaspoons"], cup:["cup","cups","c"], oz:["oz","ounce","ounces"], lb:["lb","lbs","pound","pounds"], g:["g","gram","grams"], kg:["kg","kilogram","kilograms"], ml:["ml","milliliter","milliliters"], clove:["clove","cloves"], can:["can","cans"], stick:["stick","sticks"], slice:["slice","slices"], "":[""]};
+const UNIT_OF = {}; Object.entries(UNIT_ALIASES).forEach(([k, list]) => list.forEach(a => UNIT_OF[a] = k));
+const UNIT_SHOW = {tbsp:["tbsp","tbsp"], tsp:["tsp","tsp"], cup:["cup","cups"], oz:["oz","oz"], lb:["lb","lbs"], g:["g","g"], kg:["kg","kg"], ml:["ml","ml"], clove:["clove","cloves"], can:["can","cans"], stick:["stick","sticks"], slice:["slice","slices"], "":["",""]};
+function parseQty(q){
+  let s = String(q||"").trim();
+  if (!s) return null;
+  const m = s.match(NUM_RE); if (!m) return null;
+  let v = tokenVal(m[0]); s = s.slice(m[0].length);
+  const fr = s.match(/^\s+([½⅓⅔¼¾⅛⅜⅝⅞])/); if (fr){ v += UNI[fr[1]]; s = s.slice(fr[0].length); }
+  if (/^\s*[-–]\s*\d/.test(s) || !Number.isFinite(v)) return null;
+  const unitRaw = s.trim().toLowerCase().replace(/\.$/, "");
+  if (!(unitRaw in UNIT_OF)) return {v, unit: "raw:" + unitRaw, raw: s.trim()};
+  return {v, unit: UNIT_OF[unitRaw]};
+}
+function totalIngredients(r, f){
+  f = f || 1;
+  const ps = partsOf(r), multi = ps.length > 1;
+  const groups = new Map();
+  ps.forEach((p, pi) => p.ingredients.forEach(ing => {
+    if (!String(ing.item||"").trim() && !String(ing.qty||"").trim()) return;
+    const k = (typeof pKey === "function" ? pKey(ing.item) : "") || String(ing.item||"").toLowerCase().trim();
+    if (!groups.has(k)) groups.set(k, {list: [], parts: new Set()});
+    const g = groups.get(k); g.list.push(ing); g.parts.add(partLabel(p, pi));
+  }));
+  return [...groups.values()].map(g => {
+    const first = g.list[0];
+    if (g.list.length === 1) return {qty: scaleQty(first.qty, f), item: first.item, url: safeUrl(first.url), from: multi ? [...g.parts] : [], src: first};
+    const sums = new Map(), extra = [];
+    g.list.forEach(i => {
+      const q = parseQty(i.qty);
+      if (!q){ if (String(i.qty||"").trim()) extra.push(scaleQty(i.qty, f)); return; }
+      const cur = sums.get(q.unit) || {v:0, raw:q.raw}; cur.v += q.v * f; sums.set(q.unit, cur);
+    });
+    const bits = [...sums.entries()].map(([u, c]) => {
+      const n = fmtNum(c.v);
+      if (u.startsWith("raw:")) return n + " " + c.raw;
+      const show = UNIT_SHOW[u]; const unit = c.v > 1 ? show[1] : show[0];
+      return (n + " " + unit).trim();
+    }).concat(extra);
+    const name = String(first.item||"").split(",")[0].trim();
+    return {qty: bits.join(" + "), item: name, url: safeUrl((g.list.find(i => safeUrl(i.url)) || {}).url), from: [...g.parts], merged: true, src: first};
+  });
+}
+function totalSection(r, f, sv, showHave){
+  const list = totalIngredients(r, f);
+  return '<section class="total" id="totalList"><div class="sec-h"><h3>Total ingredients</h3><button class="btn sm" type="button" data-act="copy">Copy list</button></div>' +
+    '<p class="hint" style="margin:0 0 8px">Everything from all ' + partsOf(r).length + ' parts in one shopping list' + (f !== 1 ? ', scaled for ' + sv + ' servings' : '') + '. Matching items are added together.</p>' +
+    '<ul class="ing-list">' + list.map((t, i) => {
+      const key = "t-" + i, done = state.checkedIng.has(key);
+      const item = t.url ? '<a class="ing-link" href="' + esc(t.url) + '" target="_blank" rel="noopener noreferrer">' + esc(t.item) + ICON.ext + '</a>' : esc(t.item);
+      return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(t.item) + '"><span class="ing-text">' +
+        (t.qty ? '<span class="qty">' + esc(t.qty) + '</span> ' : "") + item +
+        (t.from.length ? '<span class="from">' + esc(t.from.join(" + ")) + '</span>' : "") +
+        (showHave && inPantry(t.src) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
+    }).join("") + '</ul></section>';
+}
+
 
 function toast(msg){
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
@@ -1225,7 +1286,7 @@ function renderDetail(){
       videoSection(r) +
       (multi ? '<p class="parts-note">This recipe has ' + parts.length + ' parts: ' + esc(parts.map(partLabel).join(", ")) + '.</p>' : "") +
       '<div class="cols">' +
-        '<section><div class="sec-h"><h3>Ingredients</h3>' + (anyIng ? '<button class="btn sm" type="button" data-act="copy">Copy list</button>' : "") + '</div>' +
+        '<section><div class="sec-h"><h3>Ingredients</h3>' + (anyIng ? '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + (multi ? '<button class="btn sm ghost" type="button" data-act="to-total">Total list ↓</button>' : "") + '<button class="btn sm" type="button" data-act="copy">Copy list</button></div>' : "") + '</div>' +
           (f !== 1 ? '<p class="hint" style="margin:0 0 6px">Amounts scaled for ' + sv + ' servings.</p>' : "") +
           parts.map((p, pi) => !p.ingredients.length ? "" :
             (multi ? '<h4 class="part-h">' + esc(partLabel(p, pi)) + '</h4>' : "") +
@@ -1245,6 +1306,7 @@ function renderDetail(){
           (!anySteps ? '<p class="hint">No steps yet.</p>' : "") +
         '</section>' +
       '</div>' +
+      (multi && anyIng ? totalSection(r, f, sv, showHave) : "") +
       (r.notes ? '<section><h3 style="font-size:20px;margin-bottom:8px">Notes</h3><div class="notes">' + esc(r.notes) + '</div></section>' : "") +
       (src || srcName ? '<div class="source"><span class="lbl">Source</span>' +
         (src ? '<a class="btn yolk sm" href="' + esc(src) + '" target="_blank" rel="noopener noreferrer">' + esc(srcName || "View original") + ' ' + ICON.ext.replace("<svg", '<svg width="14" height="14"') + '</a><span class="hint">' + esc(domainOf(src)) + '</span>' : '<span>' + esc(srcName) + '</span>') + '</div>' : "") +
@@ -1336,9 +1398,11 @@ function renderForm(){
         '<div class="field"><label for="f-rating">Your rating</label><select class="inp" id="f-rating">' +
           [0,1,2,3,4,5].map(n => '<option value="' + n + '"' + (num(d.rating) === n ? " selected" : "") + '>' + (n ? "★".repeat(n) + " (" + n + ")" : "Not rated") + '</option>').join("") + '</select></div>' +
       '</div>' +
-      (hasParts ? '<div class="field"><label for="f-mainname">Name for the main part <span class="hint">Optional, like “Chicken” or “Cake”. Shown as “Main” if left blank.</span></label><input class="inp" id="f-mainname" value="' + esc(d.mainName) + '" placeholder="Main"></div>' : "") +
+      (hasParts ? '<div class="part-box part-main">' +
+        '<div class="field"><label for="f-mainname">Part 1 name</label><input class="inp" id="f-mainname" value="' + esc(d.mainName) + '" placeholder="Chicken, cake, dough, pasta…"></div>' : "") +
       ingBlock(d.ingredients, -1) +
-      '<div class="field"><label for="f-steps">Steps <span class="hint">One step per line.</span></label><textarea class="inp" id="f-steps" rows="7">' + esc((d.steps||[]).join("\n")) + '</textarea></div>' +
+      '<div class="field"><label for="f-steps">Steps <span class="hint">One step per line.</span></label><textarea class="inp" id="f-steps" rows="' + (hasParts ? 5 : 7) + '">' + esc((d.steps||[]).join("\n")) + '</textarea></div>' +
+      (hasParts ? '</div>' : "") +
       d.parts.map((p, pi) =>
         '<div class="part-box" data-part="' + pi + '">' +
           '<div class="part-top"><div class="field"><label for="f-pname' + pi + '">Part ' + (pi + 2) + ' name</label><input class="inp part-name" id="f-pname' + pi + '" value="' + esc(p.name) + '" placeholder="Sauce, crust, filling, marinade, frosting, side…"></div>' +
@@ -1373,7 +1437,7 @@ function syncDraft(){
   draft.ingredients = readRows($("#ingRows", f));
   draft.steps = readSteps($("#f-steps", f));
   const mn = $("#f-mainname", f); if (mn) draft.mainName = mn.value.trim();
-  draft.parts = [...f.querySelectorAll(".part-box")].map(box => ({
+  draft.parts = [...f.querySelectorAll(".part-box[data-part]")].map(box => ({
     name: box.querySelector(".part-name").value.trim(),
     ingredients: readRows(box.querySelector(".ing-rows")),
     steps: readSteps(box.querySelector(".part-steps"))
@@ -1558,14 +1622,13 @@ document.addEventListener("click", async e => {
     case "copy": {
       if (!r) break;
       const base = num(r.servings), f = base ? (state.servings || base) / base : 1;
-      const ps = partsOf(r), multi = ps.length > 1;
-      const line = i => "- " + [scaleQty(i.qty, f), i.item].filter(Boolean).join(" ");
-      const text = r.title + "\n" + ps.filter(p => p.ingredients.length).map((p, pi) => (multi ? "\n" + partLabel(p, ps.indexOf(p)) + ":\n" : "") + p.ingredients.map(line).join("\n")).join("\n");
+      const text = r.title + "\n" + totalIngredients(r, f).map(t => "- " + [t.qty, t.item].filter(Boolean).join(" ")).join("\n");
       try{ await navigator.clipboard.writeText(text); toast("Ingredients copied. Paste them into your shopping list."); }
       catch(err){ toast("Your browser blocked copying. Select the list and copy it by hand."); }
       break;
     }
     case "fclose": closeForm(); break;
+    case "to-total": { const el = $("#totalList"); if (el) el.scrollIntoView({behavior:"smooth", block:"start"}); break; }
     case "pclose": closePantry(); break;
     case "cclose": closeCook(); break;
     case "cook": closePantry(); openCook(); break;
