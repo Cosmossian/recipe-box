@@ -197,6 +197,14 @@ select.sort{appearance:none;-webkit-appearance:none;height:38px;padding:0 38px 0
 .steps li::before{content:counter(s);width:36px;height:36px;border:2px solid var(--line);border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;background:var(--bg)}
 .steps li.done{opacity:.45}
 .steps li.done::before{background:var(--lunch);color:#0E1A12}
+.part-h{font-family:var(--display);font-size:18px;font-weight:800;margin:20px 0 6px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.part-h:first-child{margin-top:0}
+.steps + .part-h{margin-top:26px}
+.parts-note{margin:-6px 0 0;font-size:14px;color:var(--muted)}
+.part-box{border:2px solid var(--line);border-radius:16px;padding:16px;background:var(--bg);display:flex;flex-direction:column;gap:14px}
+.part-box .inp{background:var(--surface)}
+.part-top{display:flex;gap:8px;align-items:flex-end}
+.part-top .field{flex:1}
 .notes{background:var(--soft);border-radius:14px;padding:16px 18px;white-space:pre-wrap;max-width:75ch}
 .source{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:2px solid var(--line);padding-top:18px}
 .source .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
@@ -245,6 +253,7 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .confirm .acts{display:flex;justify-content:flex-end;gap:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:12px;font-weight:600;z-index:80;box-shadow:4px 4px 0 var(--breakfast);max-width:calc(100% - 32px)}
 .toast[hidden]{display:none}
+.bulk-box[hidden]{display:none}
 
 /* Recommendations */
 .recs{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;margin-bottom:26px}
@@ -382,6 +391,16 @@ const newId = () => "r" + Date.now().toString(36) + Math.random().toString(36).s
 const num = v => { const n = parseInt(v,10); return Number.isFinite(n) && n > 0 ? n : 0; };
 const fmtMin = m => !m ? "" : m < 60 ? m + " min" : Math.floor(m/60) + " hr" + (m%60 ? " " + (m%60) + " min" : "");
 const totalMin = r => num(r.prepMin) + num(r.cookMin);
+/* A recipe can have extra parts (a sauce, crust, filling, marinade, side…), each with its own ingredients and steps.
+   The main part lives in r.ingredients / r.steps (named by r.mainName); extras live in r.parts. */
+const blankIng = () => ({qty:"", item:"", url:""});
+function partsOf(r){
+  const extra = (r.parts || []).filter(p => p && (p.name || (p.ingredients||[]).length || (p.steps||[]).length));
+  return [{name: r.mainName || "", ingredients: r.ingredients || [], steps: r.steps || []}]
+    .concat(extra.map(p => ({name: p.name || "", ingredients: p.ingredients || [], steps: p.steps || []})));
+}
+const partLabel = (p, i) => p.name || (i === 0 ? "Main" : "Part " + (i + 1));
+const allIngredients = r => partsOf(r).flatMap(p => p.ingredients);
 
 function toast(msg){
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
@@ -434,16 +453,44 @@ function splitIngredient(line){
   if (m && m[2]) return {qty:m[1].trim(), item:m[2].trim(), url};
   return {qty:"", item:line, url};
 }
+const ING_WORDS = "ingredients?";
+const STEP_WORDS = "directions|instructions|method|steps|preparation";
+const capFirst = s => s.charAt(0).toUpperCase() + s.slice(1);
+function partHeader(raw, sec){
+  const low = raw.toLowerCase().replace(/[:\s]+$/,"").trim();
+  let m;
+  if ((m = low.match(new RegExp("^(?:" + ING_WORDS + ")\\s+for\\s+(?:the\\s+)?(.{2,40})$")))) return {sec:"ing", name:m[1]};
+  if ((m = low.match(new RegExp("^(.{2,40}?)\\s+(?:" + ING_WORDS + ")$")))) return {sec:"ing", name:m[1]};
+  if ((m = low.match(new RegExp("^(?:" + STEP_WORDS + ")\\s+for\\s+(?:the\\s+)?(.{2,40})$")))) return {sec:"steps", name:m[1]};
+  if ((m = low.match(new RegExp("^(.{2,40}?)\\s+(?:" + STEP_WORDS + ")$")))) return {sec:"steps", name:m[1]};
+  if (sec !== "ing" && sec !== "steps") return null;
+  if ((m = low.match(/^(?:for|to make)\s+(?:the\s+)?([a-z][a-z '&-]{1,38})$/))) return {sec, name:m[1]};
+  if (/:\s*$/.test(raw) && (m = low.match(/^([a-z][a-z '&-]{1,30})$/)) && m[1].split(/\s+/).length <= 4) return {sec, name:m[1]};
+  return null;
+}
 function parseRecipeText(text){
   const lines = text.split(/\r?\n/).map(s => s.trim());
-  const out = {title:"", ingredients:[], steps:[], notes:[], sourceUrl:"", servings:0, prepMin:0, cookMin:0};
-  let sec = "head";
+  const out = {title:"", mainName:"", ingredients:[], steps:[], parts:[], notes:[], sourceUrl:"", servings:0, prepMin:0, cookMin:0};
+  let sec = "head", cur = 0;
+  const target = () => cur === 0 ? out : out.parts[cur - 1];
+  const switchTo = (name, inSec) => {
+    name = capFirst(name.replace(/^the\s+/i, "").trim());
+    const key = name.toLowerCase();
+    if (out.mainName && out.mainName.toLowerCase() === key){ cur = 0; return; }
+    const at = out.parts.findIndex(p => p.name.toLowerCase() === key);
+    if (at >= 0){ cur = at + 1; return; }
+    const mainEmpty = inSec === "ing" ? !out.ingredients.length : !out.steps.length;
+    if (!out.mainName && mainEmpty && !out.parts.length){ out.mainName = name; cur = 0; return; }
+    out.parts.push({name, ingredients:[], steps:[]}); cur = out.parts.length;
+  };
   for (const raw of lines){
     if (!raw) continue;
     const low = raw.toLowerCase().replace(/[:\s]+$/,"");
-    if (/^(ingredients?|what you.ll need|you.ll need)$/.test(low)){ sec = "ing"; continue; }
-    if (/^(directions|instructions|method|steps|preparation|how to make it)$/.test(low)){ sec = "steps"; continue; }
+    if (/^(ingredients?|what you.ll need|you.ll need)$/.test(low)){ sec = "ing"; cur = 0; continue; }
+    if (/^(directions|instructions|method|steps|preparation|how to make it)$/.test(low)){ sec = "steps"; cur = 0; continue; }
     if (/^(notes?|tips?)$/.test(low)){ sec = "notes"; continue; }
+    const ph = partHeader(raw, sec);
+    if (ph){ sec = ph.sec; switchTo(ph.name, ph.sec); continue; }
     const um = raw.match(/https?:\/\/\S+/);
     if (um && !out.sourceUrl && (sec === "head" || /^source/i.test(raw) || sec === "notes")){ out.sourceUrl = safeUrl(um[0].replace(/[).,]+$/,"")); if (/^\s*(source|from|via)?\s*:?\s*https?:/i.test(raw)) continue; }
     let m;
@@ -451,8 +498,8 @@ function parseRecipeText(text){
     if ((m = raw.match(/prep(?:\s*time)?\s*:?\s*(\d+)\s*(h|hr|hour|m|min)/i))) { out.prepMin = /^h/i.test(m[2]) ? m[1]*60 : +m[1]; }
     if ((m = raw.match(/cook(?:\s*time)?\s*:?\s*(\d+)\s*(h|hr|hour|m|min)/i))) { out.cookMin = /^h/i.test(m[2]) ? m[1]*60 : +m[1]; }
     if (sec === "head"){ if (!out.title && !/^(prep|cook|total|serves|servings|source)/i.test(raw)) out.title = raw.replace(/^#+\s*/,""); continue; }
-    if (sec === "ing") out.ingredients.push(splitIngredient(raw));
-    else if (sec === "steps") out.steps.push(cleanLine(raw).replace(/^(?:step\s*)?\d+\s*[.):-]\s*/i, ""));
+    if (sec === "ing") target().ingredients.push(splitIngredient(raw));
+    else if (sec === "steps") target().steps.push(cleanLine(raw).replace(/^(?:step\s*)?\d+\s*[.):-]\s*/i, ""));
     else if (sec === "notes") out.notes.push(cleanLine(raw));
   }
   return out;
@@ -646,7 +693,7 @@ function filtered(){
   const q = state.q.trim().toLowerCase();
   let list = state.recipes.filter(r => (state.meal === "all" || r.meal === state.meal) && (!state.favOnly || r.fav) && (state.by === "all" || (r.publishedBy||"") === state.by));
   if (q){
-    list = list.filter(r => [r.title, (r.tags||[]).join(" "), (r.ingredients||[]).map(i => i.item).join(" "), r.notes].join(" ").toLowerCase().includes(q));
+    list = list.filter(r => [r.title, (r.tags||[]).join(" "), allIngredients(r).map(i => i.item).join(" "), partsOf(r).map(p => p.name).join(" "), r.notes].join(" ").toLowerCase().includes(q));
   }
   const s = state.sort;
   list.sort((a,b) => s === "az" ? String(a.title).localeCompare(String(b.title))
@@ -708,7 +755,7 @@ function renderBy(){
 const SKIP = new Set("salt pepper black kosher oil olive vegetable water sugar flour purpose all butter unsalted egg eggs milk vanilla extract baking powder soda chopped diced sliced minced fresh large small medium ground grated dried drained whole cup cups can cans and the for into of to taste optional room temperature juice zest juiced zested cloves clove".split(" "));
 function keyWords(r){
   const s = new Set();
-  (r.ingredients||[]).forEach(i => String(i.item||"").toLowerCase().split(/[,(]/)[0].replace(/[^a-z\s]/g," ").split(/\s+/).forEach(w => {
+  allIngredients(r).forEach(i => String(i.item||"").toLowerCase().split(/[,(]/)[0].replace(/[^a-z\s]/g," ").split(/\s+/).forEach(w => {
     if (w.length > 2 && !SKIP.has(w)) s.add(w.endsWith("s") && w.length > 4 && !w.endsWith("ss") ? w.slice(0,-1) : w);
   }));
   return s;
@@ -907,6 +954,8 @@ function renderDetail(){
   const f = base ? sv / base : 1;
   const src = safeUrl(r.sourceUrl);
   const srcName = r.sourceName || (src ? domainOf(src) : "");
+  const parts = partsOf(r), multi = parts.length > 1;
+  const anyIng = parts.some(p => p.ingredients.length), anySteps = parts.some(p => p.steps.length);
   el.innerHTML =
     '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="close" aria-label="Close">' + ICON.close + '</button>' +
     '<div class="acts">' +
@@ -928,19 +977,26 @@ function renderDetail(){
         '<div class="fact"><div class="k">Serves</div><div class="v">' + (base ? '<div class="stepper"><button type="button" data-act="sv-" aria-label="Fewer servings">−</button><span>' + sv + '</span><button type="button" data-act="sv+" aria-label="More servings">+</button></div>' : "—") + '</div></div>' +
       '</div>' +
       videoSection(r) +
+      (multi ? '<p class="parts-note">This recipe has ' + parts.length + ' parts: ' + esc(parts.map(partLabel).join(", ")) + '.</p>' : "") +
       '<div class="cols">' +
-        '<section><div class="sec-h"><h3>Ingredients</h3>' + ((r.ingredients||[]).length ? '<button class="btn sm" type="button" data-act="copy">Copy list</button>' : "") + '</div>' +
+        '<section><div class="sec-h"><h3>Ingredients</h3>' + (anyIng ? '<button class="btn sm" type="button" data-act="copy">Copy list</button>' : "") + '</div>' +
           (f !== 1 ? '<p class="hint" style="margin:0 0 6px">Amounts scaled for ' + sv + ' servings.</p>' : "") +
-          '<ul class="ing-list">' + (r.ingredients||[]).map((ing, i) => {
-            const u = safeUrl(ing.url);
-            const item = u ? '<a class="ing-link" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(ing.item) + ICON.ext + '</a>' : esc(ing.item);
-            const done = state.checkedIng.has(i);
-            return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + i + '" data-ing="' + i + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleQty(ing.qty, f)) + '</span> ' : "") + item + '</span></li>';
-          }).join("") + '</ul>' + (!(r.ingredients||[]).length ? '<p class="hint">No ingredients yet.</p>' : "") +
+          parts.map((p, pi) => !p.ingredients.length ? "" :
+            (multi ? '<h4 class="part-h">' + esc(partLabel(p, pi)) + '</h4>' : "") +
+            '<ul class="ing-list">' + p.ingredients.map((ing, i) => {
+              const key = pi + "-" + i;
+              const u = safeUrl(ing.url);
+              const item = u ? '<a class="ing-link" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(ing.item) + ICON.ext + '</a>' : esc(ing.item);
+              const done = state.checkedIng.has(key);
+              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleQty(ing.qty, f)) + '</span> ' : "") + item + '</span></li>';
+            }).join("") + '</ul>').join("") +
+          (!anyIng ? '<p class="hint">No ingredients yet.</p>' : "") +
         '</section>' +
         '<section><div class="sec-h"><h3>Method</h3><span class="hint">Tap a step to mark it done</span></div>' +
-          '<ol class="steps">' + (r.steps||[]).map((s, i) => '<li tabindex="0" data-step="' + i + '" class="' + (state.checkedSteps.has(i) ? "done" : "") + '">' + esc(s) + '</li>').join("") + '</ol>' +
-          (!(r.steps||[]).length ? '<p class="hint">No steps yet.</p>' : "") +
+          parts.map((p, pi) => !p.steps.length ? "" :
+            (multi ? '<h4 class="part-h">' + esc(partLabel(p, pi)) + '</h4>' : "") +
+            '<ol class="steps">' + p.steps.map((s, i) => { const key = pi + "-" + i; return '<li tabindex="0" data-step="' + key + '" class="' + (state.checkedSteps.has(key) ? "done" : "") + '">' + esc(s) + '</li>'; }).join("") + '</ol>').join("") +
+          (!anySteps ? '<p class="hint">No steps yet.</p>' : "") +
         '</section>' +
       '</div>' +
       (r.notes ? '<section><h3 style="font-size:20px;margin-bottom:8px">Notes</h3><div class="notes">' + esc(r.notes) + '</div></section>' : "") +
@@ -957,6 +1013,9 @@ function blankRecipe(){
 function lastName(){ try{ return localStorage.getItem("recipe-box-name") || ""; }catch(e){ return ""; } }
 function openForm(r){
   draft = JSON.parse(JSON.stringify(r || blankRecipe()));
+  draft.mainName = draft.mainName || "";
+  draft.parts = (draft.parts || []).map(p => ({name: p.name || "", ingredients: (p.ingredients||[]).length ? p.ingredients : [blankIng()], steps: p.steps || []}));
+  if (!(draft.ingredients||[]).length) draft.ingredients = [blankIng()];
   draft._isNew = !r; draft._newBlob = null; draft._preview = ""; draft._removePhoto = false; draft._newVideo = null; draft._videoPreview = ""; draft._removeVideo = false;
   renderForm();
   $("#formOv").hidden = false;
@@ -991,16 +1050,26 @@ function videoField(){
       '<div class="photo-acts"><button class="btn sm" type="button" data-act="pick-video">Replace video</button><button class="btn sm ghost" type="button" data-act="rm-video">Remove video</button></div>'
     : '<div><button class="btn sm" type="button" data-act="pick-video">▶ Upload a video clip</button></div>') + '</div>';
 }
+function ingBlock(list, pi){
+  const main = pi < 0;
+  return '<div class="field ing-block" data-part="' + pi + '"><span class="lab">Ingredients' + (main ? ' <span class="hint">Add a link to any ingredient, like where to buy it.</span>' : "") + '</span>' +
+    '<div class="ing-head"><span>Amount</span><span>Ingredient</span><span>Link</span><span></span></div>' +
+    '<div class="ing-rows"' + (main ? ' id="ingRows"' : "") + '>' + list.map(ingRow).join("") + '</div>' +
+    '<div class="photo-acts"><button class="btn sm" type="button" data-act="add-ing">+ Add ingredient</button><button class="btn sm ghost" type="button" data-act="bulk">Paste a list</button></div>' +
+    '<div hidden class="field bulk-box" style="margin-top:8px"><textarea class="inp bulk-inp" rows="5" aria-label="Paste ingredients, one per line" placeholder="One per line, like:&#10;2 cups flour&#10;1 tsp vanilla https://store.com/vanilla"></textarea><div><button class="btn yolk sm" type="button" data-act="bulk-add">Add these</button></div></div>' +
+  '</div>';
+}
 function renderForm(){
   const d = draft;
   const pv = previewSrc();
+  const hasParts = d.parts.length > 0;
   $("#formSheet").innerHTML =
     '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="fclose" aria-label="Close">' + ICON.close + '</button>' +
     '<div class="acts"><button class="btn primary sm" type="button" data-act="save">' + (d._isNew ? "Add to recipe box" : "Save changes") + '</button></div></div>' +
     '<form class="form" id="recipeForm" novalidate>' +
       '<h2 id="fTitle">' + (d._isNew ? "New recipe" : "Edit recipe") + '</h2>' +
       (d._isNew ? '<details class="paste"><summary>Paste a whole recipe from your Google Doc</summary><div class="in">' +
-        '<p class="hint" style="margin:0">Copy a recipe from your doc and paste it here. Put the title first, then lines that say “Ingredients” and “Directions”. A link anywhere at the top becomes the source.</p>' +
+        '<p class="hint" style="margin:0">Copy a recipe from your doc and paste it here. Put the title first, then lines that say “Ingredients” and “Directions”. A link anywhere at the top becomes the source. If it has more than one part, put a line like “For the sauce:” or “Crust:” before that part\'s ingredients and steps.</p>' +
         '<textarea class="inp" id="f-paste" rows="8" placeholder="Grandma\'s Chili&#10;Serves 6&#10;https://example.com/chili&#10;&#10;Ingredients&#10;2 lbs ground beef&#10;1 can kidney beans&#10;&#10;Directions&#10;1. Brown the beef.&#10;2. Add everything else and simmer."></textarea>' +
         '<div><button class="btn yolk sm" type="button" data-act="parse">Fill in the form</button></div></div></details>' : "") +
       '<div class="field"><label for="f-title">Recipe name</label><input class="inp" id="f-title" value="' + esc(d.title) + '" placeholder="Sunday Morning Waffles" required></div>' +
@@ -1021,13 +1090,18 @@ function renderForm(){
         '<div class="field"><label for="f-rating">Your rating</label><select class="inp" id="f-rating">' +
           [0,1,2,3,4,5].map(n => '<option value="' + n + '"' + (num(d.rating) === n ? " selected" : "") + '>' + (n ? "★".repeat(n) + " (" + n + ")" : "Not rated") + '</option>').join("") + '</select></div>' +
       '</div>' +
-      '<div class="field"><span class="lab">Ingredients <span class="hint">Add a link to any ingredient, like where to buy it.</span></span>' +
-        '<div class="ing-head"><span>Amount</span><span>Ingredient</span><span>Link</span><span></span></div>' +
-        '<div class="ing-rows" id="ingRows">' + d.ingredients.map(ingRow).join("") + '</div>' +
-        '<div class="photo-acts"><button class="btn sm" type="button" data-act="add-ing">+ Add ingredient</button><button class="btn sm ghost" type="button" data-act="bulk">Paste a list</button></div>' +
-        '<div id="bulkBox" hidden class="field" style="margin-top:8px"><textarea class="inp" id="f-bulk" rows="5" placeholder="One per line, like:&#10;2 cups flour&#10;1 tsp vanilla https://store.com/vanilla"></textarea><div><button class="btn yolk sm" type="button" data-act="bulk-add">Add these</button></div></div>' +
-      '</div>' +
+      (hasParts ? '<div class="field"><label for="f-mainname">Name for the main part <span class="hint">Optional, like “Chicken” or “Cake”. Shown as “Main” if left blank.</span></label><input class="inp" id="f-mainname" value="' + esc(d.mainName) + '" placeholder="Main"></div>' : "") +
+      ingBlock(d.ingredients, -1) +
       '<div class="field"><label for="f-steps">Steps <span class="hint">One step per line.</span></label><textarea class="inp" id="f-steps" rows="7">' + esc((d.steps||[]).join("\n")) + '</textarea></div>' +
+      d.parts.map((p, pi) =>
+        '<div class="part-box" data-part="' + pi + '">' +
+          '<div class="part-top"><div class="field"><label for="f-pname' + pi + '">Part ' + (pi + 2) + ' name</label><input class="inp part-name" id="f-pname' + pi + '" value="' + esc(p.name) + '" placeholder="Sauce, crust, filling, marinade, frosting, side…"></div>' +
+          '<button class="btn sm ghost" type="button" data-act="rm-part" data-part="' + pi + '">Remove part</button></div>' +
+          ingBlock(p.ingredients, pi) +
+          '<div class="field"><label for="f-psteps' + pi + '">Steps <span class="hint">One step per line.</span></label><textarea class="inp part-steps" id="f-psteps' + pi + '" rows="5">' + esc((p.steps||[]).join("\n")) + '</textarea></div>' +
+        '</div>').join("") +
+      '<div class="field"><div><button class="btn sm" type="button" data-act="add-part">+ Add another part</button></div>' +
+        '<span class="hint">For recipes made of more than one piece, like a sauce, dressing, crust, filling, marinade, frosting or a side. Each part gets its own name, ingredients and steps.</span></div>' +
       '<div class="row">' +
         '<div class="field"><label for="f-src">Source link</label><input class="inp" id="f-src" type="url" value="' + esc(d.sourceUrl) + '" placeholder="https://"></div>' +
         '<div class="field"><label for="f-srcname">Source name <span class="hint">optional</span></label><input class="inp" id="f-srcname" value="' + esc(d.sourceName) + '" placeholder="NYT Cooking, Mom, a cookbook…"></div>' +
@@ -1044,12 +1118,20 @@ function syncDraft(){
   draft.title = $("#f-title", f).value.trim();
   const m = f.querySelector('input[name="meal"]:checked'); if (m) draft.meal = m.value;
   draft.prepMin = $("#f-prep", f).value; draft.cookMin = $("#f-cook", f).value; draft.servings = $("#f-serv", f).value;
-  draft.ingredients = [...f.querySelectorAll(".ing-row")].map(row => ({
+  const readRows = box => [...box.querySelectorAll(".ing-row")].map(row => ({
     qty: row.querySelector('[data-k="qty"]').value.trim(),
     item: row.querySelector('[data-k="item"]').value.trim(),
     url: row.querySelector('[data-k="url"]').value.trim()
   }));
-  draft.steps = $("#f-steps", f).value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const readSteps = ta => ta.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  draft.ingredients = readRows($("#ingRows", f));
+  draft.steps = readSteps($("#f-steps", f));
+  const mn = $("#f-mainname", f); if (mn) draft.mainName = mn.value.trim();
+  draft.parts = [...f.querySelectorAll(".part-box")].map(box => ({
+    name: box.querySelector(".part-name").value.trim(),
+    ingredients: readRows(box.querySelector(".ing-rows")),
+    steps: readSteps(box.querySelector(".part-steps"))
+  }));
   draft.sourceUrl = $("#f-src", f).value.trim();
   draft.sourceName = $("#f-srcname", f).value.trim();
   draft.tags = $("#f-tags", f).value.split(",").map(s => s.trim()).filter(Boolean);
@@ -1092,17 +1174,22 @@ async function saveForm(){
   if (!draft.title){ err.textContent = "Give the recipe a name before saving."; $("#f-title").focus(); return; }
   if (!draft.publishedBy){ err.textContent = "Add your name under Published by so everyone knows whose recipe it is."; $("#f-by").focus(); return; }
   if (draft.sourceUrl && !safeUrl(draft.sourceUrl)){ err.textContent = "The source link needs to start with http:// or https://."; $("#f-src").focus(); return; }
-  const badLink = draft.ingredients.find(i => i.url && !safeUrl(i.url));
+  const badLink = draft.ingredients.concat(...draft.parts.map(p => p.ingredients)).find(i => i.url && !safeUrl(i.url));
   if (badLink){ err.textContent = "The link for “" + (badLink.item || "an ingredient") + "” needs to start with http:// or https://."; return; }
   err.textContent = "";
   const btn = $("#saveBtn"); btn.disabled = true; btn.textContent = "Saving…";
 
   const prev = state.recipes.find(x => x.id === draft.id);
+  const cleanIngs = list => list.filter(i => i.item || i.qty).map(i => ({qty:i.qty, item:i.item, url: safeUrl(i.url)}));
+  const keptParts = draft.parts.map(p => ({name: p.name, ingredients: cleanIngs(p.ingredients), steps: p.steps}))
+    .filter(p => p.name || p.ingredients.length || p.steps.length);
   const out = {
     id: draft.id, title: draft.title, meal: draft.meal,
     prepMin: num(draft.prepMin), cookMin: num(draft.cookMin), servings: num(draft.servings),
-    ingredients: draft.ingredients.filter(i => i.item || i.qty).map(i => ({qty:i.qty, item:i.item, url: safeUrl(i.url)})),
-    steps: draft.steps, tags: draft.tags, notes: draft.notes,
+    ingredients: cleanIngs(draft.ingredients),
+    steps: draft.steps,
+    mainName: keptParts.length ? draft.mainName : "",
+    parts: keptParts, tags: draft.tags, notes: draft.notes,
     sourceUrl: safeUrl(draft.sourceUrl), sourceName: draft.sourceName,
     fav: !!draft.fav, createdAt: draft.createdAt || Date.now(), updatedAt: Date.now(),
     publishedBy: draft.publishedBy || "", rating: Math.min(5, num(draft.rating)), madeCount: num(draft.madeCount), lastMade: draft.lastMade || 0,
@@ -1181,7 +1268,7 @@ document.addEventListener("click", async e => {
   const open = t.closest("[data-open]");
   if (open){ openDetail(open.dataset.open); return; }
   const stepEl = t.closest("[data-step]");
-  if (stepEl){ const i = +stepEl.dataset.step; state.checkedSteps.has(i) ? state.checkedSteps.delete(i) : state.checkedSteps.add(i); stepEl.classList.toggle("done"); return; }
+  if (stepEl){ const i = stepEl.dataset.step; state.checkedSteps.has(i) ? state.checkedSteps.delete(i) : state.checkedSteps.add(i); stepEl.classList.toggle("done"); return; }
   const act = t.closest("[data-act]");
   if (!act) return;
   const a = act.dataset.act;
@@ -1221,7 +1308,9 @@ document.addEventListener("click", async e => {
     case "copy": {
       if (!r) break;
       const base = num(r.servings), f = base ? (state.servings || base) / base : 1;
-      const text = r.title + "\n" + (r.ingredients||[]).map(i => "- " + [scaleQty(i.qty, f), i.item].filter(Boolean).join(" ")).join("\n");
+      const ps = partsOf(r), multi = ps.length > 1;
+      const line = i => "- " + [scaleQty(i.qty, f), i.item].filter(Boolean).join(" ");
+      const text = r.title + "\n" + ps.filter(p => p.ingredients.length).map((p, pi) => (multi ? "\n" + partLabel(p, ps.indexOf(p)) + ":\n" : "") + p.ingredients.map(line).join("\n")).join("\n");
       try{ await navigator.clipboard.writeText(text); toast("Ingredients copied. Paste them into your shopping list."); }
       catch(err){ toast("Your browser blocked copying. Select the list and copy it by hand."); }
       break;
@@ -1232,15 +1321,37 @@ document.addEventListener("click", async e => {
     case "pick-video": $("#vidInp").click(); break;
     case "rm-video": syncDraft(); if (draft._videoPreview) URL.revokeObjectURL(draft._videoPreview); draft._newVideo = null; draft._videoPreview = ""; draft._removeVideo = true; renderForm(); break;
     case "rm-photo": syncDraft(); if (draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview); draft._newBlob = null; draft._preview = ""; draft._removePhoto = true; renderForm(); break;
-    case "add-ing": { syncDraft(); draft.ingredients.push({qty:"",item:"",url:""}); renderForm(); const rows = document.querySelectorAll(".ing-row"); rows[rows.length-1].querySelector("input").focus(); break; }
-    case "rm-ing": { act.closest(".ing-row").remove(); syncDraft(); if (!draft.ingredients.length){ draft.ingredients.push({qty:"",item:"",url:""}); renderForm(); } break; }
-    case "bulk": { const b = $("#bulkBox"); b.hidden = !b.hidden; if (!b.hidden) $("#f-bulk").focus(); break; }
+    case "add-ing": {
+      const pi = +act.closest(".ing-block").dataset.part;
+      syncDraft(); (pi < 0 ? draft.ingredients : draft.parts[pi].ingredients).push(blankIng()); renderForm();
+      const rows = document.querySelectorAll('.ing-block[data-part="' + pi + '"] .ing-row'); rows[rows.length-1].querySelector("input").focus(); break;
+    }
+    case "rm-ing": {
+      act.closest(".ing-row").remove(); syncDraft();
+      const lists = [draft.ingredients].concat(draft.parts.map(p => p.ingredients));
+      if (lists.some(l => !l.length)){ lists.forEach(l => { if (!l.length) l.push(blankIng()); }); renderForm(); }
+      break;
+    }
+    case "bulk": { const b = act.closest(".ing-block").querySelector(".bulk-box"); b.hidden = !b.hidden; if (!b.hidden) b.querySelector("textarea").focus(); break; }
     case "bulk-add": {
+      const block = act.closest(".ing-block"), pi = +block.dataset.part;
+      const lines = block.querySelector(".bulk-inp").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       syncDraft();
-      const lines = $("#f-bulk").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       if (!lines.length) break;
-      draft.ingredients = draft.ingredients.filter(i => i.item || i.qty).concat(lines.map(splitIngredient));
+      const merged = (pi < 0 ? draft.ingredients : draft.parts[pi].ingredients).filter(i => i.item || i.qty).concat(lines.map(splitIngredient));
+      if (pi < 0) draft.ingredients = merged; else draft.parts[pi].ingredients = merged;
       renderForm(); toast("Added " + lines.length + " ingredient" + (lines.length === 1 ? "" : "s") + "."); break;
+    }
+    case "add-part": {
+      syncDraft(); draft.parts.push({name:"", ingredients:[blankIng()], steps:[]}); renderForm();
+      const el = $("#f-pname" + (draft.parts.length - 1)); if (el){ el.focus(); el.scrollIntoView({block:"center"}); }
+      break;
+    }
+    case "rm-part": {
+      syncDraft(); const pi = +act.dataset.part, p = draft.parts[pi];
+      const hasStuff = p && (p.steps.length || p.ingredients.some(i => i.item || i.qty));
+      if (hasStuff && !await confirmBox("Remove “" + (p.name || "Part " + (pi + 2)) + "”?", "Its ingredients and steps will be taken out of this recipe when you save.", "Remove part")) break;
+      draft.parts.splice(pi, 1); renderForm(); break;
     }
     case "parse": {
       syncDraft();
@@ -1250,13 +1361,17 @@ document.addEventListener("click", async e => {
       if (p.title) draft.title = p.title;
       if (p.ingredients.length) draft.ingredients = p.ingredients;
       if (p.steps.length) draft.steps = p.steps;
+      if (p.parts.length){ draft.mainName = p.mainName; draft.parts = p.parts.map(x => ({name:x.name, ingredients: x.ingredients.length ? x.ingredients : [blankIng()], steps:x.steps})); }
+      else if (p.mainName && !draft.mainName) draft.mainName = p.mainName;
       if (p.notes.length) draft.notes = p.notes.join("\n");
       if (p.sourceUrl) draft.sourceUrl = p.sourceUrl;
       if (p.servings) draft.servings = p.servings;
       if (p.prepMin) draft.prepMin = p.prepMin;
       if (p.cookMin) draft.cookMin = p.cookMin;
       renderForm();
-      toast("Found " + p.ingredients.length + " ingredients and " + p.steps.length + " steps. Check them over, then save.");
+      const nIng = p.ingredients.length + p.parts.reduce((a, x) => a + x.ingredients.length, 0);
+      const nSteps = p.steps.length + p.parts.reduce((a, x) => a + x.steps.length, 0);
+      toast("Found " + nIng + " ingredients and " + nSteps + " steps" + (p.parts.length ? " in " + (p.parts.length + 1) + " parts" : "") + ". Check them over, then save.");
       break;
     }
   }
@@ -1264,7 +1379,7 @@ document.addEventListener("click", async e => {
 
 document.addEventListener("change", e => {
   const c = e.target.closest("[data-ing]");
-  if (c){ const i = +c.dataset.ing; c.checked ? state.checkedIng.add(i) : state.checkedIng.delete(i); c.closest("li").classList.toggle("done", c.checked); }
+  if (c){ const i = c.dataset.ing; c.checked ? state.checkedIng.add(i) : state.checkedIng.delete(i); c.closest("li").classList.toggle("done", c.checked); }
 });
 document.addEventListener("submit", e => { if (e.target.id === "recipeForm"){ e.preventDefault(); saveForm(); } });
 document.addEventListener("keydown", e => {
