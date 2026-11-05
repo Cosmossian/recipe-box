@@ -178,6 +178,7 @@ select.sort{appearance:none;-webkit-appearance:none;height:38px;padding:0 38px 0
 .fact .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
 .fact .v{font-family:var(--display);font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 .stepper{display:flex;align-items:center;gap:8px}
+.stepper button[disabled]{opacity:.35;cursor:not-allowed}
 .stepper button{width:30px;height:30px;border-radius:8px;border:2px solid var(--line);background:var(--bg);cursor:pointer;font-weight:800;line-height:1;padding:0}
 .cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:36px}
 .sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
@@ -457,6 +458,66 @@ function parseQty(q){
   if (!(unitRaw in UNIT_OF)) return {v, unit: "raw:" + unitRaw, raw: s.trim()};
   return {v, unit: UNIT_OF[unitRaw]};
 }
+/* Kitchen-friendly scaling: amounts are converted and rounded to what measuring cups and spoons can do. */
+const VOL_TSP = {tsp:1, tbsp:3, cup:48};
+const COUNT_UNITS = new Set(["", "clove", "can", "stick", "slice"]);
+const isCountUnit = u => COUNT_UNITS.has(u) || String(u).startsWith("raw:");
+const roundTo = (v, step) => Math.round(v / step) * step;
+const SPOONS = [0.125, 0.25, 0.5, 0.75, 1];
+function fmtTspOnly(tsp){
+  if (tsp >= 2.6) return "1 tbsp";
+  const t = tsp <= 1 ? SPOONS.reduce((a, b) => Math.abs(b - tsp) <= Math.abs(a - tsp) ? b : a) : roundTo(tsp, 0.25);
+  return fmtNum(t) + " tsp";
+}
+function fmtTbsp(tsp){
+  let tb = Math.floor(tsp / 3 + 1e-6), rem = roundTo(tsp - tb * 3, 0.25);
+  if (rem >= 3){ tb++; rem = 0; }
+  if (Math.abs(rem - 1.5) < 1e-6) return fmtNum(tb + 0.5) + " tbsp";
+  if (!tb) return fmtTspOnly(rem);
+  return tb + " tbsp" + (rem ? " + " + fmtNum(rem) + " tsp" : "");
+}
+function fmtVol(tsp){
+  if (tsp < 0.1) return "pinch";
+  if (tsp < 2.9) return fmtTspOnly(tsp);
+  if (tsp < 11.5) return fmtTbsp(tsp);
+  const cups = tsp / 48, tol = 0.75 / 48;
+  const whole = Math.floor(cups + tol);
+  let best = whole;
+  [1/4, 1/3, 1/2, 2/3, 3/4].forEach(fr => { if (whole + fr <= cups + tol) best = whole + fr; });
+  const remTsp = (cups - best) * 48;
+  if (remTsp > 0.75 && tsp <= 24 && Math.abs(tsp / 1.5 - Math.round(tsp / 1.5)) < 0.1) return fmtTbsp(tsp);
+  const cupTxt = best > 0 ? fmtNum(best) + " " + (best > 1 ? "cups" : "cup") : "";
+  if (remTsp <= Math.max(0.75, tsp * 0.04) || !cupTxt) return cupTxt || fmtTbsp(tsp);
+  return cupTxt + " + " + fmtVol(remTsp);
+}
+function fmtUnit(v, unit, raw){
+  if (unit in VOL_TSP) return fmtVol(v * VOL_TSP[unit]);
+  if (unit === "lb") return v < 1 ? fmtUnit(v * 16, "oz") : fmtNum(roundTo(v, 0.25)) + (v > 1 ? " lbs" : " lb");
+  if (unit === "oz") return fmtNum(Math.max(0.5, roundTo(v, 0.5))) + " oz";
+  if (unit === "kg") return v < 1 ? fmtUnit(v * 1000, "g") : fmtNum(roundTo(v, 0.1)) + " kg";
+  if (unit === "g" || unit === "ml") return Math.max(1, Math.round(v)) + " " + unit;
+  const n = fmtNum(Math.max(0.5, roundTo(v, 0.5)));
+  if (unit.startsWith("raw:")) return (n + " " + (raw || "")).trim();
+  const show = UNIT_SHOW[unit] || ["", ""];
+  return (n + " " + (roundTo(v, 0.5) > 1 ? show[1] : show[0])).trim();
+}
+function scaleSmart(qty, f){
+  if (!qty || f === 1) return qty;
+  const q = parseQty(qty);
+  if (!q) return scaleQty(qty, f);
+  return fmtUnit(q.v * f, q.unit, q.raw);
+}
+/* Which serving counts work: at least a quarter batch, and countable things (eggs, cans, cloves…) come out whole or in halves. */
+function servingSteps(r){
+  const base = num(r.servings);
+  if (!base) return [];
+  const counts = allIngredients(r).map(i => parseQty(i.qty)).filter(q => q && isCountUnit(q.unit));
+  const floor = Math.max(1, Math.ceil(base / 4)), max = Math.min(99, Math.max(base * 4, 12));
+  const ok = s => counts.every(q => { const v = q.v * s / base; return v >= 0.5 - 1e-9 && Math.abs(v * 2 - Math.round(v * 2)) < 0.06; });
+  const out = [];
+  for (let s = floor; s <= max; s++) if (s === base || ok(s)) out.push(s);
+  return out;
+}
 function totalIngredients(r, f){
   f = f || 1;
   const ps = partsOf(r), multi = ps.length > 1;
@@ -469,21 +530,22 @@ function totalIngredients(r, f){
   }));
   return [...groups.values()].map(g => {
     const first = g.list[0];
-    if (g.list.length === 1) return {qty: scaleQty(first.qty, f), item: first.item, url: safeUrl(first.url), from: multi ? [...g.parts] : [], src: first};
-    const sums = new Map(), extra = [];
+    if (g.list.length === 1) return {qty: scaleSmart(first.qty, f), item: first.item, url: safeUrl(first.url), from: multi ? [...g.parts] : [], src: first};
+    let vol = 0, oz = 0; const sums = new Map(), extra = [];
     g.list.forEach(i => {
       const q = parseQty(i.qty);
-      if (!q){ if (String(i.qty||"").trim()) extra.push(scaleQty(i.qty, f)); return; }
-      const cur = sums.get(q.unit) || {v:0, raw:q.raw}; cur.v += q.v * f; sums.set(q.unit, cur);
+      if (!q){ if (String(i.qty||"").trim()) extra.push(scaleSmart(i.qty, f)); return; }
+      const v = q.v * f;
+      if (q.unit in VOL_TSP) vol += v * VOL_TSP[q.unit];
+      else if (q.unit === "oz" || q.unit === "lb") oz += q.unit === "lb" ? v * 16 : v;
+      else { const cur = sums.get(q.unit) || {v:0, raw:q.raw}; cur.v += v; sums.set(q.unit, cur); }
     });
-    const bits = [...sums.entries()].map(([u, c]) => {
-      const n = fmtNum(c.v);
-      if (u.startsWith("raw:")) return n + " " + c.raw;
-      const show = UNIT_SHOW[u]; const unit = c.v > 1 ? show[1] : show[0];
-      return (n + " " + unit).trim();
-    }).concat(extra);
+    const bits = [];
+    if (vol) bits.push(fmtVol(vol));
+    if (oz) bits.push(oz >= 16 ? fmtUnit(oz / 16, "lb") : fmtUnit(oz, "oz"));
+    sums.forEach((c, u) => bits.push(f === 1 && isCountUnit(u) ? (fmtNum(c.v) + " " + (u.startsWith("raw:") ? c.raw : (UNIT_SHOW[u] || ["",""])[c.v > 1 ? 1 : 0])).trim() : fmtUnit(c.v, u, c.raw)));
     const name = String(first.item||"").split(",")[0].trim();
-    return {qty: bits.join(" + "), item: name, url: safeUrl((g.list.find(i => safeUrl(i.url)) || {}).url), from: [...g.parts], merged: true, src: first};
+    return {qty: bits.concat(extra).join(" + "), item: name, url: safeUrl((g.list.find(i => safeUrl(i.url)) || {}).url), from: [...g.parts], merged: true, src: first};
   });
 }
 function equipSection(r){
@@ -1272,6 +1334,7 @@ function renderDetail(){
   const src = safeUrl(r.sourceUrl);
   const srcName = r.sourceName || (src ? domainOf(src) : "");
   const parts = partsOf(r), multi = parts.length > 1;
+  const steps = servingSteps(r);
   const anyIng = parts.some(p => p.ingredients.length), anySteps = parts.some(p => p.steps.length);
   const showHave = state.pantry.items.length > 0;
   el.innerHTML =
@@ -1292,14 +1355,14 @@ function renderDetail(){
         '<div class="fact"><div class="k">Prep</div><div class="v">' + (fmtMin(num(r.prepMin)) || "—") + '</div></div>' +
         '<div class="fact"><div class="k">Cook</div><div class="v">' + (fmtMin(num(r.cookMin)) || "—") + '</div></div>' +
         '<div class="fact"><div class="k">Total</div><div class="v">' + (fmtMin(totalMin(r)) || "—") + '</div></div>' +
-        '<div class="fact"><div class="k">Serves</div><div class="v">' + (base ? '<div class="stepper"><button type="button" data-act="sv-" aria-label="Fewer servings">−</button><span>' + sv + '</span><button type="button" data-act="sv+" aria-label="More servings">+</button></div>' : "—") + '</div></div>' +
+        '<div class="fact"><div class="k">Serves</div><div class="v">' + (base ? '<div class="stepper"><button type="button" data-act="sv-" aria-label="Fewer servings"' + (steps.length && sv <= steps[0] ? ' disabled title="As small as this recipe goes"' : "") + '>−</button><span>' + sv + '</span><button type="button" data-act="sv+" aria-label="More servings"' + (steps.length && sv >= steps[steps.length - 1] ? ' disabled title="As big as this recipe scales"' : "") + '>+</button></div>' : "—") + '</div></div>' +
       '</div>' +
       videoSection(r) +
       equipSection(r) +
       (multi ? '<p class="parts-note">This recipe has ' + parts.length + ' parts: ' + esc(parts.map(partLabel).join(", ")) + '.</p>' : "") +
       '<div class="cols">' +
         '<section><div class="sec-h"><h3>Ingredients</h3>' + (anyIng ? '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + (multi ? '<button class="btn sm ghost" type="button" data-act="to-total">Total list ↓</button>' : "") + '<button class="btn sm" type="button" data-act="copy">Copy list</button></div>' : "") + '</div>' +
-          (f !== 1 ? '<p class="hint" style="margin:0 0 6px">Amounts scaled for ' + sv + ' servings.</p>' : "") +
+          (f !== 1 ? '<p class="hint" style="margin:0 0 6px">Scaled for ' + sv + ' servings (from ' + base + ') and rounded to kitchen measurements.</p>' : "") +
           parts.map((p, pi) => !p.ingredients.length ? "" :
             (multi ? '<h4 class="part-h">' + esc(partLabel(p, pi)) + '</h4>' : "") +
             '<ul class="ing-list">' + p.ingredients.map((ing, i) => {
@@ -1307,7 +1370,7 @@ function renderDetail(){
               const u = safeUrl(ing.url);
               const item = u ? '<a class="ing-link" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(ing.item) + ICON.ext + '</a>' : esc(ing.item);
               const done = state.checkedIng.has(key);
-              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleQty(ing.qty, f)) + '</span> ' : "") + item + (showHave && inPantry(ing) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
+              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleSmart(ing.qty, f)) + '</span> ' : "") + item + (showHave && inPantry(ing) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
             }).join("") + '</ul>').join("") +
           (!anyIng ? '<p class="hint">No ingredients yet.</p>' : "") +
         '</section>' +
@@ -1629,8 +1692,10 @@ document.addEventListener("click", async e => {
       break;
     case "sv-": case "sv+": {
       const base = num(r && r.servings); if (!base) break;
-      const cur = state.servings || base;
-      state.servings = Math.max(1, Math.min(99, cur + (a === "sv+" ? 1 : -1)));
+      const cur = state.servings || base, steps = servingSteps(r);
+      const next = a === "sv+" ? steps.find(s => s > cur) : [...steps].reverse().find(s => s < cur);
+      if (next == null){ toast(a === "sv+" ? "That's as big as this recipe scales." : "That's as small as this recipe goes. Some amounts would be too small to measure."); break; }
+      state.servings = next;
       renderDetail(); break;
     }
     case "copy": {
