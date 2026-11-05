@@ -201,6 +201,7 @@ select.sort{appearance:none;-webkit-appearance:none;height:38px;padding:0 38px 0
 .part-h:first-child{margin-top:0}
 .steps + .part-h{margin-top:26px}
 .part-main{gap:14px}
+.equip-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));column-gap:28px}
 .total{border:2px solid var(--line);border-radius:18px;padding:18px 20px;background:var(--bg);scroll-margin-top:80px}
 .total .from{font-size:12px;color:var(--muted);font-weight:600;margin-left:8px;white-space:nowrap}
 .parts-note{margin:-6px 0 0;font-size:14px;color:var(--muted)}
@@ -485,6 +486,14 @@ function totalIngredients(r, f){
     return {qty: bits.join(" + "), item: name, url: safeUrl((g.list.find(i => safeUrl(i.url)) || {}).url), from: [...g.parts], merged: true, src: first};
   });
 }
+function equipSection(r){
+  const list = (r.equipment || []).filter(e => String(e).trim());
+  if (!list.length) return "";
+  return '<section class="equip"><h3 style="font-size:24px;margin-bottom:10px">Equipment</h3><ul class="ing-list equip-list">' + list.map((e, i) => {
+    const key = "e-" + i, done = state.checkedIng.has(key);
+    return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got out ' + esc(e) + '"><span class="ing-text">' + esc(e) + '</span></li>';
+  }).join("") + '</ul></section>';
+}
 function totalSection(r, f, sv, showHave){
   const list = totalIngredients(r, f);
   return '<section class="total" id="totalList"><div class="sec-h"><h3>Total ingredients</h3><button class="btn sm" type="button" data-act="copy">Copy list</button></div>' +
@@ -568,7 +577,7 @@ function partHeader(raw, sec){
 }
 function parseRecipeText(text){
   const lines = text.split(/\r?\n/).map(s => s.trim());
-  const out = {title:"", mainName:"", ingredients:[], steps:[], parts:[], notes:[], sourceUrl:"", servings:0, prepMin:0, cookMin:0};
+  const out = {title:"", mainName:"", ingredients:[], steps:[], parts:[], equipment:[], notes:[], sourceUrl:"", servings:0, prepMin:0, cookMin:0};
   let sec = "head", cur = 0;
   const target = () => cur === 0 ? out : out.parts[cur - 1];
   const switchTo = (name, inSec) => {
@@ -587,6 +596,8 @@ function parseRecipeText(text){
     if (/^(ingredients?|what you.ll need|you.ll need)$/.test(low)){ sec = "ing"; cur = 0; continue; }
     if (/^(directions|instructions|method|steps|preparation|how to make it)$/.test(low)){ sec = "steps"; cur = 0; continue; }
     if (/^(notes?|tips?)$/.test(low)){ sec = "notes"; continue; }
+    if (/^(equipment|tools|kitchen tools|tools (?:and|&) equipment|equipment needed|special equipment|you.ll also need)$/.test(low)){ sec = "equip"; continue; }
+    if (sec === "equip"){ const e = cleanLine(raw); if (e) out.equipment.push(e); continue; }
     const ph = partHeader(raw, sec);
     if (ph){ sec = ph.sec; switchTo(ph.name, ph.sec); continue; }
     const um = raw.match(/https?:\/\/\S+/);
@@ -792,7 +803,7 @@ function filtered(){
   const q = state.q.trim().toLowerCase();
   let list = state.recipes.filter(r => (state.meal === "all" || r.meal === state.meal) && (!state.favOnly || r.fav) && (state.by === "all" || (r.publishedBy||"") === state.by));
   if (q){
-    list = list.filter(r => [r.title, (r.tags||[]).join(" "), allIngredients(r).map(i => i.item).join(" "), partsOf(r).map(p => p.name).join(" "), r.notes].join(" ").toLowerCase().includes(q));
+    list = list.filter(r => [r.title, (r.tags||[]).join(" "), allIngredients(r).map(i => i.item).join(" "), partsOf(r).map(p => p.name).join(" "), (r.equipment||[]).join(" "), r.notes].join(" ").toLowerCase().includes(q));
   }
   const s = state.sort;
   list.sort((a,b) => s === "az" ? String(a.title).localeCompare(String(b.title))
@@ -1284,6 +1295,7 @@ function renderDetail(){
         '<div class="fact"><div class="k">Serves</div><div class="v">' + (base ? '<div class="stepper"><button type="button" data-act="sv-" aria-label="Fewer servings">−</button><span>' + sv + '</span><button type="button" data-act="sv+" aria-label="More servings">+</button></div>' : "—") + '</div></div>' +
       '</div>' +
       videoSection(r) +
+      equipSection(r) +
       (multi ? '<p class="parts-note">This recipe has ' + parts.length + ' parts: ' + esc(parts.map(partLabel).join(", ")) + '.</p>' : "") +
       '<div class="cols">' +
         '<section><div class="sec-h"><h3>Ingredients</h3>' + (anyIng ? '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + (multi ? '<button class="btn sm ghost" type="button" data-act="to-total">Total list ↓</button>' : "") + '<button class="btn sm" type="button" data-act="copy">Copy list</button></div>' : "") + '</div>' +
@@ -1316,7 +1328,7 @@ function renderDetail(){
 /* ---------- form ---------- */
 let draft = null;
 function blankRecipe(){
-  return {id:newId(), title:"", meal: state.meal !== "all" ? state.meal : "dinner", prepMin:"", cookMin:"", servings:"", ingredients:[{qty:"",item:"",url:""}], steps:[], tags:[], notes:"", sourceUrl:"", sourceName:"", fav:false, publishedBy: lastName()};
+  return {id:newId(), title:"", meal: state.meal !== "all" ? state.meal : "dinner", prepMin:"", cookMin:"", servings:"", ingredients:[{qty:"",item:"",url:""}], steps:[], equipment:[], tags:[], notes:"", sourceUrl:"", sourceName:"", fav:false, publishedBy: lastName()};
 }
 function lastName(){ try{ return localStorage.getItem("recipe-box-name") || ""; }catch(e){ return ""; } }
 function openForm(r){
@@ -1377,7 +1389,7 @@ function renderForm(){
     '<form class="form" id="recipeForm" novalidate>' +
       '<h2 id="fTitle">' + (d._isNew ? "New recipe" : "Edit recipe") + '</h2>' +
       (d._isNew ? '<details class="paste"><summary>Paste a whole recipe from your Google Doc</summary><div class="in">' +
-        '<p class="hint" style="margin:0">Copy a recipe from your doc and paste it here. Put the title first, then lines that say “Ingredients” and “Directions”. A link anywhere at the top becomes the source. If it has more than one part, put a line like “For the sauce:” or “Crust:” before that part\'s ingredients and steps.</p>' +
+        '<p class="hint" style="margin:0">Copy a recipe from your doc and paste it here. Put the title first, then lines that say “Ingredients” and “Directions”. A link anywhere at the top becomes the source. If it has more than one part, put a line like “For the sauce:” or “Crust:” before that part\'s ingredients and steps. A line that says “Equipment” starts the equipment list.</p>' +
         '<textarea class="inp" id="f-paste" rows="8" placeholder="Grandma\'s Chili&#10;Serves 6&#10;https://example.com/chili&#10;&#10;Ingredients&#10;2 lbs ground beef&#10;1 can kidney beans&#10;&#10;Directions&#10;1. Brown the beef.&#10;2. Add everything else and simmer."></textarea>' +
         '<div><button class="btn yolk sm" type="button" data-act="parse">Fill in the form</button></div></div></details>' : "") +
       '<div class="field"><label for="f-title">Recipe name</label><input class="inp" id="f-title" value="' + esc(d.title) + '" placeholder="Sunday Morning Waffles" required></div>' +
@@ -1398,6 +1410,7 @@ function renderForm(){
         '<div class="field"><label for="f-rating">Your rating</label><select class="inp" id="f-rating">' +
           [0,1,2,3,4,5].map(n => '<option value="' + n + '"' + (num(d.rating) === n ? " selected" : "") + '>' + (n ? "★".repeat(n) + " (" + n + ")" : "Not rated") + '</option>').join("") + '</select></div>' +
       '</div>' +
+      '<div class="field"><label for="f-equip">Equipment <span class="hint">Optional. One per line, like “sheet pan” or “blender”.</span></label><textarea class="inp" id="f-equip" rows="3" style="min-height:80px" placeholder="Large skillet&#10;9×13 baking dish&#10;Stand mixer">' + esc((d.equipment||[]).join("\n")) + '</textarea></div>' +
       (hasParts ? '<div class="part-box part-main">' +
         '<div class="field"><label for="f-mainname">Part 1 name</label><input class="inp" id="f-mainname" value="' + esc(d.mainName) + '" placeholder="Chicken, cake, dough, pasta…"></div>' : "") +
       ingBlock(d.ingredients, -1) +
@@ -1436,6 +1449,7 @@ function syncDraft(){
   const readSteps = ta => ta.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   draft.ingredients = readRows($("#ingRows", f));
   draft.steps = readSteps($("#f-steps", f));
+  draft.equipment = readSteps($("#f-equip", f));
   const mn = $("#f-mainname", f); if (mn) draft.mainName = mn.value.trim();
   draft.parts = [...f.querySelectorAll(".part-box[data-part]")].map(box => ({
     name: box.querySelector(".part-name").value.trim(),
@@ -1497,7 +1511,7 @@ async function saveForm(){
     id: draft.id, title: draft.title, meal: draft.meal,
     prepMin: num(draft.prepMin), cookMin: num(draft.cookMin), servings: num(draft.servings),
     ingredients: cleanIngs(draft.ingredients),
-    steps: draft.steps,
+    steps: draft.steps, equipment: draft.equipment || [],
     mainName: keptParts.length ? draft.mainName : "",
     parts: keptParts, tags: draft.tags, notes: draft.notes,
     sourceUrl: safeUrl(draft.sourceUrl), sourceName: draft.sourceName,
@@ -1696,6 +1710,7 @@ document.addEventListener("click", async e => {
       if (p.parts.length){ draft.mainName = p.mainName; draft.parts = p.parts.map(x => ({name:x.name, ingredients: x.ingredients.length ? x.ingredients : [blankIng()], steps:x.steps})); }
       else if (p.mainName && !draft.mainName) draft.mainName = p.mainName;
       if (p.notes.length) draft.notes = p.notes.join("\n");
+      if (p.equipment.length) draft.equipment = p.equipment;
       if (p.sourceUrl) draft.sourceUrl = p.sourceUrl;
       if (p.servings) draft.servings = p.servings;
       if (p.prepMin) draft.prepMin = p.prepMin;

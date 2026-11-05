@@ -57,6 +57,9 @@ You'll need 4 files: `index.html`, `config.js`, `README.md` (this file) go on Gi
 ## Good to know
 
 - **Videos:** Recipes with a TikTok, Instagram or YouTube link as the Source show the video right in the recipe. If a short TikTok link (`tiktok.com/t/...`) won't load, edit the recipe and paste the full link (`tiktok.com/@name/video/123...`). You can also upload your own MP4 clip (up to 50 MB).
+- **Recipes with more than one part** (a sauce, crust, filling, marinade, frosting, side…): in the recipe form, click **+ Add another part**. Each part gets its own name, ingredients and steps. When pasting a recipe, put a line like `For the sauce:` or `Crust:` before each part's ingredients and steps and it'll be split up for you.
+- **Equipment:** each recipe has an optional Equipment list (one item per line) that shows above the ingredients. When pasting a recipe, a line that says `Equipment` starts that list.
+- **Pantry:** click **Pantry** at the top to list what you have on hand, then **What can I make?** to see recipes you have everything for (plus ones you're only 1 or 2 items short on). Each person's pantry is private and follows their account. To turn on syncing, run `pantry-setup.sql` once in Supabase (**SQL Editor > New query**, paste, **Run**). Until then, pantries are saved on each device.
 - **Favorites** are saved per device, so everyone keeps their own.
 - **"I made this"** works for anyone who's signed in, on any recipe.
 - **Free Supabase projects pause after 7 days with no visits.** If the site stops loading recipes, open supabase.com, go to your project and click **Restore**. Visiting the site now and then keeps it awake.
