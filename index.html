@@ -825,7 +825,13 @@ async function init(){
   if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || /YOUR_/.test(CFG.supabaseUrl + CFG.supabaseAnonKey) || !window.supabase){ initLocal(); return; }
   sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
   try{ const { data } = await sb.auth.getSession(); await setSession(data.session); }catch(e){ renderAuth(); }
-  sb.auth.onAuthStateChange((event, session) => { if (event !== "INITIAL_SESSION") setSession(session); });
+  // Supabase runs this inside its own auth lock, so making more Supabase calls here can freeze sign-in/sign-out.
+  // Defer the work until the lock is released. Token refreshes only need the new session saved.
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "INITIAL_SESSION") return;
+    if (event === "TOKEN_REFRESHED"){ state.session = session || state.session; return; }
+    setTimeout(() => setSession(session), 0);
+  });
   await refresh();
   routeFromHash();
   window.addEventListener("focus", () => { if (state.mode === "db") refresh(); });
@@ -1037,7 +1043,7 @@ const CHANGES = [
     {title: "Your pantry names what you have", text: "Recipes now say which pantry item covers each ingredient. If two fit, like two beef bone broths, it lists both so you can grab either."},
     {title: "Pantry counts", text: "Add something you already have and it counts up (×2, ×3). The − button takes one away.", show: "pantry"},
     {title: "Look-alike items", text: "Items with similar names, like two different Kinders seasonings, can both go in your pantry. Things you add while signed out are kept when you sign in."},
-    {title: "Small fixes", text: "The search box fits on every screen, and the top of the page stays tidy when you're signed in."}
+    {title: "Small fixes", text: "The search box fits on every screen, the top of the page stays tidy when you're signed in, and Sign out works every time."}
   ]},
   {date: "2026-11-04", items: [
     {title: "What's in my pantry", text: "Keep a list of the spices and ingredients you have. It's saved to your account, so it's the same on your phone and computer.", show: "pantry"},
@@ -1789,7 +1795,15 @@ document.addEventListener("click", async e => {
   switch(a){
     case "new": if (state.mode === "db" && !state.session){ openSignIn("in"); break; } openForm(null); break;
     case "signin": openSignIn("in"); break;
-    case "signout": await sb.auth.signOut(); toast("Signed out."); break;
+    case "signout": {
+      act.disabled = true;
+      // Don't let a stuck network call or auth lock leave you signed in on screen.
+      const done = await Promise.race([sb.auth.signOut({scope: "local"}).then(() => true).catch(() => false), new Promise(res => setTimeout(() => res(false), 4000))]);
+      if (!done){ try{ Object.keys(localStorage).filter(k => /^sb-.*-auth-token$/.test(k)).forEach(k => localStorage.removeItem(k)); }catch(e){} }
+      await setSession(null);
+      toast("Signed out.");
+      break;
+    }
     case "clear": state.q = ""; $("#q").value = ""; state.meal = "all"; state.favOnly = false; render(); break;
     case "close": closeDetail(); break;
     case "made": {
