@@ -1040,6 +1040,7 @@ function renderRecs(){
    show: "pantry" | "cook" | "new" adds a Show me button. */
 const CHANGES = [
   {date: "2026-11-05", items: [
+    {title: "Your pantry lives in your account", text: "Your pantry now always saves to your account, so it's the same on every device you sign in on (sign in to see it). A list you already made on this device moves over the next time you sign in.", show: "pantry"},
     {title: "Your pantry names what you have", text: "Recipes now say which pantry item covers each ingredient. If two fit, like two beef bone broths, it lists both so you can grab either."},
     {title: "Pantry counts", text: "Add something you already have and it counts up (×2, ×3). The − button takes one away.", show: "pantry"},
     {title: "Look-alike items", text: "Items with similar names, like two different Kinders seasonings, can both go in your pantry. Things you add while signed out are kept when you sign in."},
@@ -1158,8 +1159,13 @@ function choicesFor(r){
   return allIngredients(r).map(ing => ({ing, items: [...new Set(pantryMatches(ing).filter(e => e.item).map(e => e.item))]})).filter(c => c.items.length > 1);
 }
 const pantryUid = () => state.session && state.session.user && state.session.user.id;
+/* Connected to Supabase? (state.mode is still "loading" when the sign-in is first checked, so go by sb.) */
+const dbMode = () => !!sb && state.mode !== "local";
 async function loadPantry(){
-  if (state.mode !== "db" || !pantryUid()){ state.pantrySync = "local"; renderPantryIfOpen(); return; }
+  if (!dbMode()){ state.pantrySync = "local"; renderPantryIfOpen(); return; }
+  // The pantry belongs to an account: nothing shows while signed out. The device copy is kept (not shown)
+  // so it can be moved into the account at the next sign-in.
+  if (!pantryUid()){ state.pantry = {items: [], basics: true}; state.pantrySync = "signedout"; pantryIdx = null; renderPantryIfOpen(); return; }
   try{
     const { data, error } = await sb.from("pantries").select("data").eq("user_id", pantryUid()).maybeSingle();
     if (error) throw error;
@@ -1174,7 +1180,7 @@ async function loadPantry(){
     state.pantrySync = "synced";
     if (extra.length || !remote) await pushPantry();
     savePantryLocal();
-    if (extra.length && remote) toast("Added " + extra.length + " item" + (extra.length === 1 ? "" : "s") + " from this device to your pantry.");
+    if (extra.length) toast(remote ? "Added " + extra.length + " item" + (extra.length === 1 ? "" : "s") + " from this device to your pantry." : "Your pantry is now saved to your account (" + extra.length + " item" + (extra.length === 1 ? "" : "s") + ").");
   }catch(e){
     const msg = String((e && (e.message || e.code)) || "");
     state.pantrySync = /pantries|relation|schema cache|42P01|PGRST20/i.test(msg) ? "missing" : "error";
@@ -1233,14 +1239,20 @@ function recipeSuggestions(){
   return [...count.values()].sort((a,b) => b.n - a.n || a.name.localeCompare(b.name)).map(c => c.name);
 }
 function syncNote(){
-  if (state.mode !== "db") return "Saved in this browser.";
+  if (!dbMode()) return "Saved in this browser.";
   if (!state.session) return "Saved on this device. Sign in to keep your pantry on all your devices.";
   if (state.pantrySync === "synced") return "Synced to your account, so it's the same on your phone and computer.";
   if (state.pantrySync === "missing") return "Saved on this device for now. (Syncing turns on once the pantry table is added in Supabase.)";
   if (state.pantrySync === "error") return "Saved on this device. Couldn't reach your account just now.";
   return "Loading your pantry…";
 }
+function needSignInForPantry(){
+  if (!dbMode() || state.session) return false;
+  openSignIn("in"); toast("Sign in to use your pantry. It's saved to your account.");
+  return true;
+}
 function openPantry(){
+  if (needSignInForPantry()) return;
   renderPantry();
   $("#pantryOv").hidden = false; document.body.style.overflow = "hidden";
   setTimeout(() => { const n = $("#p-name"); if (n && window.matchMedia("(min-width:700px)").matches) n.focus(); }, 50);
@@ -1295,6 +1307,7 @@ function cookMatches(){
   return {ready, almost};
 }
 function openCook(){
+  if (needSignInForPantry()) return;
   if (!state.pantry.items.length){ openPantry(); toast("Add a few things to your pantry first."); return; }
   renderCook();
   $("#cookOv").hidden = false; document.body.style.overflow = "hidden";
@@ -1800,6 +1813,8 @@ document.addEventListener("click", async e => {
       // Don't let a stuck network call or auth lock leave you signed in on screen.
       const done = await Promise.race([sb.auth.signOut({scope: "local"}).then(() => true).catch(() => false), new Promise(res => setTimeout(() => res(false), 4000))]);
       if (!done){ try{ Object.keys(localStorage).filter(k => /^sb-.*-auth-token$/.test(k)).forEach(k => localStorage.removeItem(k)); }catch(e){} }
+      // Your pantry is safe in your account, so don't leave a copy on this device for the next person.
+      if (state.pantrySync === "synced"){ clearTimeout(pantryTimer); try{ await pushPantry(); }catch(e){} try{ localStorage.removeItem(P_KEY); }catch(e){} }
       await setSession(null);
       toast("Signed out.");
       break;
