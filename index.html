@@ -293,6 +293,9 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .miss button{font-size:12px;font-weight:700;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:3px 9px;cursor:pointer}
 .miss button:hover{background:var(--lunch);color:#0E1A12}
 .have-tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-left:8px;white-space:nowrap}
+.have-tag.named{display:block;margin:2px 0 0;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;white-space:normal}
+.have-tag.pick{color:var(--ink)}
+.cc-pick{font-size:12.5px;font-weight:600;line-height:1.3;border-left:3px solid var(--breakfast);padding-left:7px;margin-top:2px}
 @media (max-width:560px){ .p-add{grid-template-columns:1fr auto} .p-add select{grid-column:1 / -1;grid-row:2} }
 
 /* Recommendations */
@@ -575,7 +578,7 @@ function totalSection(r, f, sv, showHave){
       return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(t.item) + '"><span class="ing-text">' +
         (t.qty ? '<span class="qty">' + esc(t.qty) + '</span> ' : "") + item +
         (t.from.length ? '<span class="from">' + esc(t.from.join(" + ")) + '</span>' : "") +
-        (showHave && inPantry(t.src) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
+        (showHave ? haveTag(t.src) : "") + '</span></li>';
     }).join("") + '</ul></section>';
 }
 
@@ -1066,14 +1069,32 @@ state.pantrySync = "local";
 let pantryTimer = null, pantryIdx = null;
 function pantryIndex(){
   if (pantryIdx) return pantryIdx;
-  const names = state.pantry.items.map(i => i.name).concat(state.pantry.basics ? BASICS : []);
-  pantryIdx = names.map(coreTokens).filter(t => t.length);
+  pantryIdx = state.pantry.items.map(i => ({item: i, t: coreTokens(i.name)}))
+    .concat((state.pantry.basics ? BASICS : []).map(b => ({item: null, t: coreTokens(b)})))
+    .filter(e => e.t.length);
   return pantryIdx;
 }
-function inPantry(ing){
+const tokMatch = (t, p) => p.every(w => t.includes(w)) || t.every(w => p.includes(w));
+/* Which of your pantry items cover this ingredient (basics like salt count as {item:null}). */
+function pantryMatches(ing){
   const t = coreTokens(ing.item);
-  if (!t.length) return false;
-  return pantryIndex().some(p => p.every(w => t.includes(w)) || t.every(w => p.includes(w)));
+  if (!t.length) return [];
+  return pantryIndex().filter(e => tokMatch(t, e.t));
+}
+const inPantry = ing => pantryMatches(ing).length > 0;
+const orList = names => names.length < 2 ? (names[0] || "") : names.slice(0, -1).join(", ") + " or " + names[names.length - 1];
+function haveTag(ing){
+  const m = pantryMatches(ing);
+  if (!m.length) return "";
+  const items = [...new Set(m.filter(e => e.item).map(e => e.item))];
+  const nm = i => esc(i.name) + (pQty(i) > 1 ? " ×" + pQty(i) : "");
+  if (!items.length) return '<span class="have-tag named">✓ Basic, counted as on hand</span>';
+  if (items.length === 1) return '<span class="have-tag named">✓ In pantry: ' + nm(items[0]) + '</span>';
+  return '<span class="have-tag named pick">✓ You have ' + items.length + ': ' + orList(items.map(nm)) + ' (use either)</span>';
+}
+/* Ingredients where you have 2+ different matching items, for the What can I make? cards. */
+function choicesFor(r){
+  return allIngredients(r).map(ing => ({ing, items: [...new Set(pantryMatches(ing).filter(e => e.item).map(e => e.item))]})).filter(c => c.items.length > 1);
 }
 const pantryUid = () => state.session && state.session.user && state.session.user.id;
 async function loadPantry(){
@@ -1226,6 +1247,7 @@ function cookCard(m){
       '<h4>' + esc(r.title || "Untitled") + '</h4>' +
       (m.missing ? '<div class="miss"><span class="lbl">Need:</span>' + m.missing.map(i => '<button type="button" data-padd="' + esc(String(i.item).split(",")[0].trim()) + '" title="Tap if you actually have it">' + esc(String(i.item).split(",")[0].trim()) + ' · I have it</button>').join("") + '</div>'
         : '<span class="cc-m">You have all ' + m.n + ' ingredients' + (totalMin(r) ? ' · ' + fmtMin(totalMin(r)) : "") + '</span>') +
+      choicesFor(r).slice(0, 3).map(c => '<span class="cc-pick">Pick one for ' + esc(String(c.ing.item).split(",")[0].trim()) + ': ' + esc(orList(c.items.map(i => i.name))) + '</span>').join("") +
     '</div></article>';
 }
 function renderCook(){
@@ -1406,7 +1428,7 @@ function renderDetail(){
               const u = safeUrl(ing.url);
               const item = u ? '<a class="ing-link" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(ing.item) + ICON.ext + '</a>' : esc(ing.item);
               const done = state.checkedIng.has(key);
-              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleSmart(ing.qty, f)) + '</span> ' : "") + item + (showHave && inPantry(ing) ? '<span class="have-tag">✓ In pantry</span>' : "") + '</span></li>';
+              return '<li class="' + (done ? "done" : "") + '"><input type="checkbox" id="ing' + key + '" data-ing="' + key + '"' + (done ? " checked" : "") + ' aria-label="Got ' + esc(ing.item) + '"><span class="ing-text">' + (ing.qty ? '<span class="qty">' + esc(scaleSmart(ing.qty, f)) + '</span> ' : "") + item + (showHave ? haveTag(ing) : "") + '</span></li>';
             }).join("") + '</ul>').join("") +
           (!anyIng ? '<p class="hint">No ingredients yet.</p>' : "") +
         '</section>' +
