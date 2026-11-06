@@ -1029,6 +1029,8 @@ function coreTokens(s){
   return kept.length ? kept : words;
 }
 const pKey = name => coreTokens(name).join(" ");
+/* Exact-name key for the pantry list itself, so "Kinders - Steak Blend" and "Kinders - Cajun" are two different items. */
+const nameKey = name => String(name||"").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
 function guessCat(name){
   const t = " " + coreTokens(name).join(" ") + " ";
   let best = "Other", len = 0;
@@ -1041,11 +1043,16 @@ function guessCat(name){
   return best;
 }
 function loadPantryLocal(){
-  try{ const p = JSON.parse(localStorage.getItem(P_KEY) || "null"); if (p && Array.isArray(p.items)) return {items: p.items, basics: p.basics !== false}; }catch(e){}
-  return {items: [], basics: true};
+  try{ const p = JSON.parse(localStorage.getItem(P_KEY) || "null"); if (p && Array.isArray(p.items)) return {items: p.items, basics: p.basics !== false, owner: p.owner || null}; }catch(e){}
+  return {items: [], basics: true, owner: null};
 }
-function savePantryLocal(){ try{ localStorage.setItem(P_KEY, JSON.stringify(state.pantry)); }catch(e){} }
-state.pantry = loadPantryLocal();
+function savePantryLocal(){
+  try{
+    const owner = state.pantrySync === "synced" && pantryUid() ? pantryUid() : loadPantryLocal().owner;
+    localStorage.setItem(P_KEY, JSON.stringify({items: state.pantry.items, basics: state.pantry.basics, owner}));
+  }catch(e){}
+}
+state.pantry = (({items, basics}) => ({items, basics}))(loadPantryLocal());
 state.pantrySync = "local";
 let pantryTimer = null, pantryIdx = null;
 function pantryIndex(){
@@ -1066,14 +1073,17 @@ async function loadPantry(){
     const { data, error } = await sb.from("pantries").select("data").eq("user_id", pantryUid()).maybeSingle();
     if (error) throw error;
     const remote = data && data.data;
-    if (remote && Array.isArray(remote.items)){
-      state.pantry = {items: remote.items, basics: remote.basics !== false};
-      state.pantrySync = "synced";
-    } else {
-      state.pantrySync = "synced";
-      if (state.pantry.items.length) await pushPantry();
-    }
+    const local = loadPantryLocal();
+    // Items added on this device while signed out get merged in, unless they belong to someone else's account.
+    const mine = local.items.length && (!local.owner || local.owner === pantryUid()) ? local.items : [];
+    const base = remote && Array.isArray(remote.items) ? remote.items : [];
+    const have = new Set(base.map(i => nameKey(i.name)));
+    const extra = mine.filter(i => { const k = nameKey(i.name); if (!k || have.has(k)) return false; have.add(k); return true; });
+    state.pantry = {items: base.concat(extra), basics: remote ? remote.basics !== false : local.basics};
+    state.pantrySync = "synced";
+    if (extra.length || !remote) await pushPantry();
     savePantryLocal();
+    if (extra.length && remote) toast("Added " + extra.length + " item" + (extra.length === 1 ? "" : "s") + " from this device to your pantry.");
   }catch(e){
     const msg = String((e && (e.message || e.code)) || "");
     state.pantrySync = /pantries|relation|schema cache|42P01|PGRST20/i.test(msg) ? "missing" : "error";
@@ -1092,10 +1102,10 @@ function savePantry(){
   pantryTimer = setTimeout(() => { pushPantry().catch(() => toast("Couldn't sync your pantry just now. It's saved on this device.")); }, 600);
 }
 function addToPantry(names, cat){
-  const have = new Set(state.pantry.items.map(i => pKey(i.name)));
+  const have = new Set(state.pantry.items.map(i => nameKey(i.name)));
   let added = 0;
   names.map(n => String(n||"").trim().replace(/\s+/g, " ")).filter(Boolean).forEach(name => {
-    const k = pKey(name);
+    const k = nameKey(name);
     if (!k || have.has(k)) return;
     have.add(k); added++;
     state.pantry.items.push({name, cat: cat || guessCat(name)});
@@ -1104,7 +1114,7 @@ function addToPantry(names, cat){
   return added;
 }
 function removeFromPantry(key){
-  state.pantry.items = state.pantry.items.filter(i => pKey(i.name) !== key);
+  state.pantry.items = state.pantry.items.filter(i => nameKey(i.name) !== key);
   savePantry();
 }
 function recipeSuggestions(){
@@ -1159,7 +1169,7 @@ function renderPantry(){
       '<label class="p-check"><input type="checkbox" id="p-basics"' + (state.pantry.basics ? " checked" : "") + '> Always count salt, pepper and water as things I have</label>' +
       '<div style="display:flex;flex-direction:column;gap:18px;border-top:2px solid var(--line);padding-top:18px">' +
         (groups.length ? groups.map(g => '<div class="p-group"><h3>' + esc(g.cat) + ' <span class="hint">(' + g.list.length + ')</span></h3><div class="p-chips">' +
-          g.list.map(i => '<span class="p-item">' + esc(i.name) + '<button type="button" data-pdel="' + esc(pKey(i.name)) + '" aria-label="Remove ' + esc(i.name) + '">×</button></span>').join("") + '</div></div>').join("")
+          g.list.map(i => '<span class="p-item">' + esc(i.name) + '<button type="button" data-pdel="' + esc(nameKey(i.name)) + '" aria-label="Remove ' + esc(i.name) + '">×</button></span>').join("") + '</div></div>').join("")
         : '<p class="hint" style="margin:0">Your pantry is empty. Add what you have on hand, then tap <b>What can I make?</b> to see which recipes you can cook today.</p>') +
       '</div>' +
       (items.length ? '<div class="form-foot"><span class="hint" style="margin-right:auto;align-self:center">' + items.length + (items.length === 1 ? " item" : " items") + '</span><button class="btn sm ghost" type="button" data-act="p-clear">Empty the pantry</button></div>' : "") +
