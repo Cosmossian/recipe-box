@@ -59,7 +59,16 @@ h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-0
 .brand h1{font-size:clamp(28px,4vw,40px);font-weight:800;line-height:1}
 .brand p{margin:2px 0 0;color:var(--muted);font-size:14px}
 .top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1 1 auto;justify-content:flex-end;min-width:0}
-.brand .who{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.brand-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.brand .who{font-size:13px;color:var(--muted)}
+.news-btn{position:relative;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.news-btn:hover{background:var(--soft)}
+.news-dot{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--breakfast);border:2px solid var(--bg)}
+.news-dot[hidden]{display:none}
+.news-day h3{font-size:20px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.news-new{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;background:var(--breakfast);color:#17201A;border-radius:999px;padding:2px 8px}
+.news-item{border:2px solid var(--line);border-radius:14px;background:var(--surface);padding:12px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.news-item p{margin:0;font-size:15px;line-height:1.45}
 .link-btn{border:none;background:none;padding:0;font:inherit;font-weight:700;color:var(--ink);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .search{position:relative}
 .auth-box:empty{display:none}
@@ -359,7 +368,10 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
       <div>
         <h1>Recipe Box</h1>
         <p id="subtitle">Loading your recipes…</p>
-        <p class="who" id="whoLine" hidden></p>
+        <div class="brand-meta">
+          <button class="news-btn" id="newsBtn" type="button">✨ What's new<span class="news-dot" id="newsDot" hidden aria-label="(new)"></span></button>
+          <span class="who" id="whoLine" hidden></span>
+        </div>
       </div>
     </div>
     <div class="top-actions">
@@ -407,6 +419,7 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
   <main id="grid" class="grid" aria-live="polite"></main>
 </div>
 
+<div class="overlay" id="newsOv" hidden><div class="sheet" id="newsSheet" role="dialog" aria-modal="true" aria-labelledby="nTitle"></div></div>
 <div class="overlay" id="pantryOv" hidden><div class="sheet" id="pantrySheet" role="dialog" aria-modal="true" aria-labelledby="pTitle"></div></div>
 <div class="overlay" id="cookOv" hidden><div class="sheet" id="cookSheet" role="dialog" aria-modal="true" aria-labelledby="cTitle"></div></div>
 <div class="overlay" id="detailOv" hidden><div class="sheet" id="detail" role="dialog" aria-modal="true" aria-labelledby="dTitle"></div></div>
@@ -1016,6 +1029,48 @@ function renderRecs(){
 }
 
 
+/* ---------- What's new ----------
+   Add an entry at the TOP when something people would notice changes. Keep it plain and short.
+   show: "pantry" | "cook" | "new" adds a Show me button. */
+const CHANGES = [
+  {date: "2026-11-05", items: [
+    {title: "Your pantry names what you have", text: "Recipes now say which pantry item covers each ingredient. If two fit, like two beef bone broths, it lists both so you can grab either."},
+    {title: "Pantry counts", text: "Add something you already have and it counts up (×2, ×3). The − button takes one away.", show: "pantry"},
+    {title: "Look-alike items", text: "Items with similar names, like two different Kinders seasonings, can both go in your pantry. Things you add while signed out are kept when you sign in."},
+    {title: "Small fixes", text: "The search box fits on every screen, and the top of the page stays tidy when you're signed in."}
+  ]},
+  {date: "2026-11-04", items: [
+    {title: "What's in my pantry", text: "Keep a list of the spices and ingredients you have. It's saved to your account, so it's the same on your phone and computer.", show: "pantry"},
+    {title: "What can I make?", text: "See every recipe you have everything for, plus ones you're only 1 or 2 things short on. Can't decide? Tap Surprise me.", show: "cook"},
+    {title: "Recipes with more than one part", text: "Add a sauce, crust, filling, marinade or any other part, each with its own name, ingredients and steps. Pasting a recipe with lines like “For the sauce:” splits it up for you.", show: "new"},
+    {title: "Total ingredients", text: "Recipes with more than one part get one combined shopping list, with matching items added up."},
+    {title: "Equipment list", text: "List the pans and tools a recipe needs. It shows above the ingredients."},
+    {title: "Smarter serving sizes", text: "Changing the servings now rounds to real cups and spoons (a pinch instead of 0), and only offers serving counts that actually work."}
+  ]}
+];
+const NEWS_KEY = "recipe-box-news-seen";
+const newsSeen = () => { try{ return localStorage.getItem(NEWS_KEY) || ""; }catch(e){ return ""; } };
+const NEWS_VER = CHANGES[0].date + ":" + CHANGES[0].items.length;
+function renderNewsDot(){ const d = $("#newsDot"); if (d) d.hidden = newsSeen() === NEWS_VER; }
+function fmtNewsDate(iso){ const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, {month: "short", day: "numeric", year: "numeric"}); }
+const SHOW_LABEL = {pantry: "Show me the pantry", cook: "Show me what I can make", new: "Try it in a new recipe"};
+function openNews(){
+  const seen = newsSeen(), seenDate = seen.split(":")[0];
+  $("#newsSheet").innerHTML =
+    '<div class="sheet-head"><button class="btn ghost icon-btn" type="button" data-act="nclose" aria-label="Close">' + ICON.close + '</button></div>' +
+    '<div class="form">' +
+      '<div><h2 id="nTitle">What\'s new in the Recipe Box</h2><p class="hint" style="margin:6px 0 0">New things we\'ve added, newest first.</p></div>' +
+      CHANGES.map(c => '<section class="news-day"><h3>' + esc(fmtNewsDate(c.date)) + (!seenDate || c.date > seenDate ? ' <span class="news-new">New</span>' : "") + '</h3>' +
+        c.items.map(i => '<div class="news-item"><b>' + esc(i.title) + '</b><p>' + esc(i.text) + '</p>' +
+          (i.show ? '<button class="btn sm" type="button" data-news="' + esc(i.show) + '">' + esc(SHOW_LABEL[i.show] || "Show me") + ' →</button>' : "") + '</div>').join("") +
+      '</section>').join("") +
+    '</div>';
+  $("#newsOv").hidden = false; document.body.style.overflow = "hidden";
+  try{ localStorage.setItem(NEWS_KEY, NEWS_VER); }catch(e){}
+  renderNewsDot();
+}
+function closeNews(){ $("#newsOv").hidden = true; restoreScroll(); }
+
 /* ---------- pantry ---------- */
 const P_KEY = "recipe-box-pantry";
 const P_CATS = ["Spices & seasonings", "Fridge & freezer", "Produce", "Pantry shelf", "Other"];
@@ -1186,7 +1241,7 @@ function openPantry(){
 }
 function closePantry(){ $("#pantryOv").hidden = true; restoreScroll(); }
 function renderPantryIfOpen(){ if (!$("#pantryOv").hidden) renderPantry(); if (!$("#cookOv").hidden) renderCook(); if (state.openId) renderDetail(); }
-function restoreScroll(){ if (["#pantryOv","#cookOv","#detailOv","#formOv"].every(s => $(s).hidden)) document.body.style.overflow = ""; }
+function restoreScroll(){ if (["#newsOv","#pantryOv","#cookOv","#detailOv","#formOv"].every(s => $(s).hidden)) document.body.style.overflow = ""; }
 function renderPantry(){
   const items = state.pantry.items;
   const groups = P_CATS.map(cat => ({cat, list: items.filter(i => (P_CATS.includes(i.cat) ? i.cat : "Other") === cat).sort((a,b) => a.name.localeCompare(b.name))})).filter(g => g.list.length);
@@ -1708,6 +1763,15 @@ document.addEventListener("click", async e => {
   const t = e.target;
   const padd = t.closest("[data-padd]");
   if (padd){ e.stopPropagation(); const n = padd.dataset.padd; const res = addToPantry([n]); if (res.count) toast(pantryMsg(res)); renderPantryIfOpen(); return; }
+  const nshow = t.closest("[data-news]");
+  if (nshow){
+    closeNews();
+    const w = nshow.dataset.news;
+    if (w === "pantry") openPantry();
+    else if (w === "cook") openCook();
+    else if (w === "new"){ if (state.mode === "db" && !state.session) openSignIn("in"); else openForm(null); }
+    return;
+  }
   const pdel = t.closest("[data-pdel]");
   if (pdel){ removeFromPantry(pdel.dataset.pdel); renderPantryIfOpen(); return; }
   const fav = t.closest("[data-fav]");
@@ -1767,6 +1831,7 @@ document.addEventListener("click", async e => {
     case "fclose": closeForm(); break;
     case "to-total": { const el = $("#totalList"); if (el) el.scrollIntoView({behavior:"smooth", block:"start"}); break; }
     case "pclose": closePantry(); break;
+    case "nclose": closeNews(); break;
     case "cclose": closeCook(); break;
     case "cook": closePantry(); openCook(); break;
     case "pantry": closeCook(); openPantry(); break;
@@ -1873,7 +1938,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape"){
     if (!$("#confirmOv").hidden){ if ($("#authForm")){ $("#confirmOv").hidden = true; $("#confirmOv").innerHTML = ""; } return; }
     if (!$("#formOv").hidden) closeForm(); else if (!$("#detailOv").hidden) closeDetail();
-    else if (!$("#cookOv").hidden) closeCook(); else if (!$("#pantryOv").hidden) closePantry();
+    else if (!$("#cookOv").hidden) closeCook(); else if (!$("#pantryOv").hidden) closePantry(); else if (!$("#newsOv").hidden) closeNews();
     return;
   }
   if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-open], [data-step], #drop")){ e.preventDefault(); e.target.click(); }
@@ -1890,6 +1955,9 @@ document.addEventListener("error", e => {
 $("#detailOv").addEventListener("click", e => { if (e.target.id === "detailOv") closeDetail(); });
 $("#formOv").addEventListener("click", e => { if (e.target.id === "formOv") closeForm(); });
 $("#pantryOv").addEventListener("click", e => { if (e.target.id === "pantryOv") closePantry(); });
+$("#newsOv").addEventListener("click", e => { if (e.target.id === "newsOv") closeNews(); });
+$("#newsBtn").addEventListener("click", openNews);
+renderNewsDot();
 $("#cookOv").addEventListener("click", e => { if (e.target.id === "cookOv") closeCook(); });
 $("#pantryBtn").addEventListener("click", openPantry);
 $("#cookBtn").addEventListener("click", openCook);
