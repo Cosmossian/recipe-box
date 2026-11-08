@@ -288,23 +288,31 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .cook-top{background:var(--breakfast);color:#17201A;border:2px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
 .cook-top h2{font-size:clamp(24px,4vw,34px);line-height:1.05}
 .cook-top p{margin:4px 0 0;font-weight:600}
-.cook-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
-.cook-card{border:2px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:3px 3px 0 var(--shadow);display:grid;grid-template-columns:96px 1fr;overflow:hidden;cursor:pointer;transition:transform .12s, box-shadow .12s}
+.cook-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:14px}
+.cook-card{border:2px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:3px 3px 0 var(--shadow);display:grid;grid-template-columns:84px 1fr;overflow:hidden;cursor:pointer;transition:transform .12s, box-shadow .12s}
 .cook-card:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--shadow)}
 .cook-card .cc-ph{border-right:2px solid var(--line);position:relative;min-height:96px}
 .cook-card .cc-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .cook-card .cc-ph .art .letter{font-size:44px}
-.cook-card .cc-b{padding:10px 12px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
-.cook-card h4{font-size:17px;line-height:1.15}
+.cook-card .cc-b{padding:12px 14px;display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:0}
+.cook-card .cc-b > .pill{align-self:flex-start}
+.cc-sec{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.cc-sec .lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cook-card h4{font-size:17px;line-height:1.15;margin:2px 0 0}
 .cook-card .cc-m{font-size:13px;color:var(--muted)}
-.miss{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center}
-.miss .lbl{font-size:12px;font-weight:700;color:var(--muted)}
-.miss button{font-size:12px;font-weight:700;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:3px 9px;cursor:pointer}
+.miss{display:flex;flex-direction:column;gap:6px}
+.miss button{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;font-size:13px;font-weight:700;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:6px 10px;cursor:pointer;line-height:1.25}
+.miss button .add{flex:none;font-size:11.5px;font-weight:700;color:var(--muted);white-space:nowrap}
 .miss button:hover{background:var(--lunch);color:#0E1A12}
+.miss button:hover .add{color:#0E1A12}
 .have-tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-left:8px;white-space:nowrap}
 .have-tag.named{display:block;margin:2px 0 0;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;white-space:normal}
 .have-tag.pick{color:var(--ink)}
-.cc-pick{font-size:12.5px;font-weight:600;line-height:1.3;border-left:3px solid var(--breakfast);padding-left:7px;margin-top:2px}
+.cc-pick{display:flex;flex-direction:column;gap:1px;font-size:13px;line-height:1.3;border-left:3px solid var(--breakfast);padding-left:9px}
+.cc-pick b{font-weight:800}
+.cc-pick span{color:var(--muted);font-weight:600}
+.cc-pick i{font-style:normal;font-weight:800;color:var(--breakfast);margin:0 5px}
+.cc-more{font-size:12px;color:var(--muted);font-weight:600}
 @media (max-width:560px){ .p-add{grid-template-columns:1fr auto} .p-add select{grid-column:1 / -1;grid-row:2} }
 
 /* Recommendations */
@@ -1039,6 +1047,10 @@ function renderRecs(){
    Add an entry at the TOP when something people would notice changes. Keep it plain and short.
    show: "pantry" | "cook" | "new" adds a Show me button. */
 const CHANGES = [
+  {date: "2026-11-08", items: [
+    {title: "Tidier What can I make?", text: "The cards are easier to read: what you still need is listed on its own, and \u201cUse any one\u201d shows the pantry items you can pick from. The same ingredient no longer shows twice.", show: "cook"},
+    {title: "Smarter pantry matching", text: "If you have the exact item, it's used instead of look-alikes, and things that only share a word don't count: peanut butter or Cowboy Butter seasoning won't stand in for butter, and garlic powder won't count as garlic."}
+  ]},
   {date: "2026-11-05", items: [
     {title: "Your pantry lives in your account", text: "Your pantry now always saves to your account, so it's the same on every device you sign in on (sign in to see it). A list you already made on this device moves over the next time you sign in.", show: "pantry"},
     {title: "Your pantry names what you have", text: "Recipes now say which pantry item covers each ingredient. If two fit, like two beef bone broths, it lists both so you can grab either."},
@@ -1096,8 +1108,11 @@ function sing(w){
   if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0,-1);
   return w;
 }
-function coreTokens(s){
-  const first = String(s||"").toLowerCase().replace(/\([^)]*\)/g, " ").split(/,|\s[-–]\s/)[0];
+/* whole = keep everything after a dash or comma too. Pantry names use it, so "Kinders Seasoning - The Steak Blend"
+   keeps "steak blend" and isn't mistaken for every other Kinders seasoning. */
+function coreTokens(s, whole){
+  const clean = String(s||"").toLowerCase().replace(/[’']/g, "").replace(/\([^)]*\)/g, " ");
+  const first = whole ? clean : clean.split(/,|\s[-–]\s/)[0];
   const words = first.replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean).map(sing);
   const kept = words.filter(w => !P_DESC.has(w));
   return kept.length ? kept : words;
@@ -1131,17 +1146,41 @@ state.pantrySync = "local";
 let pantryTimer = null, pantryIdx = null;
 function pantryIndex(){
   if (pantryIdx) return pantryIdx;
-  pantryIdx = state.pantry.items.map(i => ({item: i, t: coreTokens(i.name)}))
+  pantryIdx = state.pantry.items.map(i => ({item: i, t: coreTokens(i.name, true)}))
     .concat((state.pantry.basics ? BASICS : []).map(b => ({item: null, t: coreTokens(b)})))
     .filter(e => e.t.length);
   return pantryIdx;
 }
-const tokMatch = (t, p) => p.every(w => t.includes(w)) || t.every(w => p.includes(w));
-/* Which of your pantry items cover this ingredient (basics like salt count as {item:null}). */
+/* Extra words that turn one food into a different one: peanut butter isn't butter, garlic powder isn't garlic,
+   chicken broth isn't chicken. ONE_WORD ones only count when the shorter name is a single word ("butter" vs
+   "cowboy butter seasoning"), so "Kinder's The Blend" can still match "Kinder's Seasoning: The Blend". */
+const P_DIFFERENT = new Set("peanut almond cashew hazelnut apple cocoa coconut chocolate cowboy powder broth stock bouillon extract paste sauce juice cream bell flake garlic onion".split(" "));
+const P_DIFFERENT_ONE_WORD = new Set("seasoning blend rub mix spice salt dressing".split(" "));
+function matchScore(t, p){
+  const extraOk = (extra, shorter) => !extra.some(w => P_DIFFERENT.has(w) || (shorter.length < 2 && P_DIFFERENT_ONE_WORD.has(w)));
+  if (t.length === p.length && t.every(w => p.includes(w))) return 1000;   // same thing
+  if (p.every(w => t.includes(w))){                                        // pantry is more general ("steak" for "sirloin steak")
+    const extra = t.filter(w => !p.includes(w));
+    return extraOk(extra, p) ? 500 + p.length : -1;
+  }
+  if (t.every(w => p.includes(w))){                                        // pantry is more specific ("olive oil" for "oil")
+    const extra = p.filter(w => !t.includes(w));
+    return extraOk(extra, t) ? 100 - extra.length : -1;
+  }
+  return -1;
+}
+/* Which of your pantry items cover this ingredient (basics like salt count as {item:null}).
+   Only the closest matches count: if you have the exact item, look-alikes aren't offered as choices. */
 function pantryMatches(ing){
   const t = coreTokens(ing.item);
   if (!t.length) return [];
-  return pantryIndex().filter(e => tokMatch(t, e.t));
+  let best = [], top = -1;
+  pantryIndex().forEach(e => {
+    const sc = matchScore(t, e.t);
+    if (sc < 0) return;
+    if (sc > top){ top = sc; best = [e]; } else if (sc === top) best.push(e);
+  });
+  return best;
 }
 const inPantry = ing => pantryMatches(ing).length > 0;
 const orList = names => names.length < 2 ? (names[0] || "") : names.slice(0, -1).join(", ") + " or " + names[names.length - 1];
@@ -1155,8 +1194,17 @@ function haveTag(ing){
   return '<span class="have-tag named pick">✓ You have ' + items.length + ': ' + orList(items.map(nm)) + ' (use either)</span>';
 }
 /* Ingredients where you have 2+ different matching items, for the What can I make? cards. */
+/* Short label for an ingredient on the cards: "Kinder's The Blend (salt…), to taste" → "Kinder's The Blend". */
+const ingLabel = ing => String(ing.item||"").replace(/\([^)]*\)?/g, " ").split(",")[0].replace(/\s+/g, " ").trim();
 function choicesFor(r){
-  return allIngredients(r).map(ing => ({ing, items: [...new Set(pantryMatches(ing).filter(e => e.item).map(e => e.item))]})).filter(c => c.items.length > 1);
+  const seen = new Set();
+  return allIngredients(r).map(ing => ({ing, label: ingLabel(ing), items: [...new Set(pantryMatches(ing).filter(e => e.item).map(e => e.item))]}))
+    .filter(c => {
+      if (c.items.length < 2) return false;
+      const k = nameKey(c.label) + "|" + c.items.map(i => nameKey(i.name)).sort().join("|");
+      if (seen.has(k)) return false;   // the same ingredient listed twice (e.g. oil in two parts) shows once
+      seen.add(k); return true;
+    });
 }
 const pantryUid = () => state.session && state.session.user && state.session.user.id;
 /* Connected to Supabase? (state.mode is still "loading" when the sign-in is first checked, so go by sb.) */
@@ -1314,14 +1362,14 @@ function openCook(){
 }
 function closeCook(){ $("#cookOv").hidden = true; restoreScroll(); }
 function cookCard(m){
-  const r = m.r;
+  const r = m.r, ch = choicesFor(r);
   return '<article class="cook-card" tabindex="0" role="button" data-open="' + esc(r.id) + '" aria-label="Open ' + esc(r.title) + '">' +
     '<div class="cc-ph">' + photoHtml(r, "") + '</div><div class="cc-b">' +
       '<span class="pill ' + esc(r.meal) + '" style="font-size:10px;padding:2px 8px">' + esc(MEALS[r.meal] ? MEALS[r.meal].label : r.meal) + '</span>' +
       '<h4>' + esc(r.title || "Untitled") + '</h4>' +
-      (m.missing ? '<div class="miss"><span class="lbl">Need:</span>' + m.missing.map(i => '<button type="button" data-padd="' + esc(String(i.item).split(",")[0].trim()) + '" title="Tap if you actually have it">' + esc(String(i.item).split(",")[0].trim()) + ' · I have it</button>').join("") + '</div>'
+      (m.missing ? '<div class="cc-sec"><span class="lbl">Still need</span><div class="miss">' + [...new Map(m.missing.map(i => [nameKey(ingLabel(i)), ingLabel(i)])).values()].map(n => '<button type="button" data-padd="' + esc(n) + '" title="Tap if you actually have it"><span class="nm">' + esc(n) + '</span><span class="add">+ I have it</span></button>').join("") + '</div></div>'
         : '<span class="cc-m">You have all ' + m.n + ' ingredients' + (totalMin(r) ? ' · ' + fmtMin(totalMin(r)) : "") + '</span>') +
-      choicesFor(r).slice(0, 3).map(c => '<span class="cc-pick">Pick one for ' + esc(String(c.ing.item).split(",")[0].trim()) + ': ' + esc(orList(c.items.map(i => i.name))) + '</span>').join("") +
+      (ch.length ? '<div class="cc-sec"><span class="lbl">Use any one</span>' + ch.slice(0, 3).map(c => '<div class="cc-pick"><b>' + esc(c.label) + '</b><span>' + c.items.map(i => esc(i.name)).join('<i>or</i>') + '</span></div>').join("") + (ch.length > 3 ? '<span class="cc-more">+ ' + (ch.length - 3) + ' more in the recipe</span>' : "") + '</div>' : "") +
     '</div></article>';
 }
 function renderCook(){
