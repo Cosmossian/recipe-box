@@ -170,6 +170,8 @@ select.sort{appearance:none;-webkit-appearance:none;height:38px;padding:0 38px 0
 .empty p{margin:0;color:var(--muted);max-width:44ch}
 .banner{border:2px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--surface);font-size:14px;margin-bottom:16px;display:flex;gap:10px;align-items:center}
 .banner b{font-weight:700}
+.draft-note{border-color:var(--breakfast);flex-wrap:wrap;margin:0 0 4px}
+.draft-note span{flex:1 1 220px}
 
 /* Overlay + sheets */
 .overlay{position:fixed;inset:0;background:rgba(10,14,11,.55);display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;z-index:50}
@@ -283,6 +285,23 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .p-item button{border:none;background:var(--soft);color:var(--ink);border-radius:50%;width:24px;height:24px;cursor:pointer;line-height:1;font-weight:800;padding:0;display:grid;place-items:center}
 .p-item button:hover{background:var(--danger);color:#fff}
 .p-group h3{font-size:19px;margin-bottom:8px}
+.p-add{grid-template-columns:minmax(0,1fr) 150px 170px auto}
+.p-item .p-name{all:unset;cursor:pointer;width:auto;height:auto;border-radius:6px;font-weight:600}
+.p-item .p-name:hover,.p-item .p-name:focus-visible{text-decoration:underline;background:none;color:inherit}
+.p-left{font-weight:700;font-size:12px;background:var(--soft);border-radius:999px;padding:1px 8px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.p-left.out{background:var(--danger);color:#fff}
+.p-item.out{opacity:.75;border-style:dashed}
+.p-item .p-more{background:var(--lunch);color:#17201A}
+.made-form{width:min(560px,100%);margin-top:6vh}
+.mk-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;max-height:55vh;overflow:auto}
+.mk-row{border:2px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.mk-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer}
+.mk-top input{width:20px;height:20px;accent-color:var(--lunch)}
+.mk-pick{width:auto;padding:4px 8px;font-size:14px}
+.mk-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mk-amt{width:140px !important;padding:6px 10px}
+.mk-ask{flex-basis:100%;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.mk-quick{display:flex;gap:6px;flex-wrap:wrap}
 .p-check{display:flex;gap:10px;align-items:center;font-weight:600;cursor:pointer}
 .p-check input{width:20px;height:20px;accent-color:var(--lunch)}
 .cook-top{background:var(--breakfast);color:#17201A;border:2px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:4px 4px 0 var(--shadow);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
@@ -313,7 +332,7 @@ details.paste .in{padding:0 16px 16px;display:flex;flex-direction:column;gap:10p
 .cc-pick span{color:var(--muted);font-weight:600}
 .cc-pick i{font-style:normal;font-weight:800;color:var(--breakfast);margin:0 5px}
 .cc-more{font-size:12px;color:var(--muted);font-weight:600}
-@media (max-width:560px){ .p-add{grid-template-columns:1fr auto} .p-add select{grid-column:1 / -1;grid-row:2} }
+@media (max-width:560px){ .p-add{grid-template-columns:1fr auto} .p-add #p-size{grid-column:1 / -1;grid-row:2} .p-add select{grid-column:1 / -1;grid-row:3} }
 
 /* Recommendations */
 .recs{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;margin-bottom:26px}
@@ -1047,6 +1066,10 @@ function renderRecs(){
    Add an entry at the TOP when something people would notice changes. Keep it plain and short.
    show: "pantry" | "cook" | "new" adds a Show me button. */
 const CHANGES = [
+  {date: "2026-11-09", items: [
+    {title: "Your new recipe won't disappear", text: "What you type into a new recipe (or an edit) is now kept on this device as you go. If the form closes before you save, or the page reloads, tap New recipe (or Edit) and it picks up where you left off, photo and pasted text included. Dragging out of a box no longer closes the form by accident.", show: "new"},
+    {title: "Your pantry keeps track of how much you have", text: "Add a size when you put something in your pantry (5 lb, 1 gallon, 12), or tap an item's name to set one. When you tap \u201cI made this\u201d, it shows what the recipe used so you can fix any amount, then takes it out. When something runs out it stays in the list marked Out. Tap + when you buy more.", show: "pantry"}
+  ]},
   {date: "2026-11-08", items: [
     {title: "Tidier What can I make?", text: "The cards are easier to read: what you still need is listed on its own, and \u201cUse any one\u201d shows the pantry items you can pick from. The same ingredient no longer shows twice.", show: "cook"},
     {title: "Smarter pantry matching", text: "If you have the exact item, it's used instead of look-alikes, and things that only share a word don't count: peanut butter or Cowboy Butter seasoning won't stand in for butter, and garlic powder won't count as garlic."}
@@ -1146,7 +1169,7 @@ state.pantrySync = "local";
 let pantryTimer = null, pantryIdx = null;
 function pantryIndex(){
   if (pantryIdx) return pantryIdx;
-  pantryIdx = state.pantry.items.map(i => ({item: i, t: coreTokens(i.name, true)}))
+  pantryIdx = state.pantry.items.filter(i => !i.out).map(i => ({item: i, t: coreTokens(i.name, true)}))
     .concat((state.pantry.basics ? BASICS : []).map(b => ({item: null, t: coreTokens(b)})))
     .filter(e => e.t.length);
   return pantryIdx;
@@ -1188,7 +1211,7 @@ function haveTag(ing){
   const m = pantryMatches(ing);
   if (!m.length) return "";
   const items = [...new Set(m.filter(e => e.item).map(e => e.item))];
-  const nm = i => esc(i.name) + (pQty(i) > 1 ? " ×" + pQty(i) : "");
+  const nm = i => esc(i.name) + (pTracked(i) ? " (" + esc(pLeftText(i)) + ")" : pQty(i) > 1 ? " ×" + pQty(i) : "");
   if (!items.length) return '<span class="have-tag named">✓ Basic, counted as on hand</span>';
   if (items.length === 1) return '<span class="have-tag named">✓ In pantry: ' + nm(items[0]) + '</span>';
   return '<span class="have-tag named pick">✓ You have ' + items.length + ': ' + orList(items.map(nm)) + ' (use either)</span>';
@@ -1249,21 +1272,28 @@ function savePantry(){
 /* Adding something you already have bumps its count (×2, ×3…) instead of making a second chip. */
 const pQty = i => Math.max(1, Math.round(num(i.qty) || 1));
 const findPantry = name => { const k = nameKey(name); return k ? state.pantry.items.find(i => nameKey(i.name) === k) : null; };
-function addToPantry(names, cat){
+function addToPantry(names, cat, size){
   let added = 0; const bumped = [];
   names.map(n => String(n||"").trim().replace(/\s+/g, " ")).filter(Boolean).forEach(name => {
     if (!nameKey(name)) return;
     const hit = findPantry(name);
-    if (hit){ hit.qty = pQty(hit) + 1; bumped.push(hit); return; }
+    if (hit){
+      if (pTracked(hit)) pAddSize(hit, size);
+      else if (size){ hit.size = size; hit.left = size.v * (pQty(hit) + 1); hit.out = false; pFixQty(hit); }
+      else hit.qty = pQty(hit) + 1;
+      bumped.push(hit); return;
+    }
     added++;
-    state.pantry.items.push({name, cat: cat || guessCat(name), qty: 1});
+    const it = {name, cat: cat || guessCat(name), qty: 1};
+    if (size){ it.size = size; it.left = size.v; }
+    state.pantry.items.push(it);
   });
   if (added || bumped.length) savePantry();
   return {added, bumped, count: added + bumped.length};
 }
 function pantryMsg(r){
   if (r.added === 1 && !r.bumped.length) return "Added " + state.pantry.items[state.pantry.items.length - 1].name + ".";
-  if (!r.added && r.bumped.length === 1) return "You now have " + r.bumped[0].name + " ×" + pQty(r.bumped[0]) + ".";
+  if (!r.added && r.bumped.length === 1) return "You now have " + r.bumped[0].name + (pTracked(r.bumped[0]) ? ": " + pLeftText(r.bumped[0]) : " ×" + pQty(r.bumped[0])) + ".";
   const nb = new Set(r.bumped).size, bits = [];
   if (r.added) bits.push("Added " + r.added + " new " + (r.added === 1 ? "item" : "items"));
   if (nb) bits.push((r.added ? "and bumped up the count on " : "Bumped up the count on ") + nb + (nb === 1 ? " thing" : " things") + " you already had");
@@ -1271,10 +1301,235 @@ function pantryMsg(r){
 }
 function removeFromPantry(key){
   const hit = state.pantry.items.find(i => nameKey(i.name) === key);
+  if (hit && pTracked(hit) && !hit.out && fnum(hit.left) > hit.size.v + 1e-6){ hit.left = fnum(hit.left) - hit.size.v; pFixQty(hit); toast(hit.name + ": " + pLeftText(hit) + "."); savePantry(); return; }
   if (hit && pQty(hit) > 1){ hit.qty = pQty(hit) - 1; toast(hit.name + (hit.qty > 1 ? " is now ×" + hit.qty + "." : ": 1 left.")); }
   else state.pantry.items = state.pantry.items.filter(i => nameKey(i.name) !== key);
   savePantry();
 }
+/* ---------- Pantry amounts (Nov 9, 2026) ----------
+   A tracked item has size = {v, u} (one package, as typed when you add it) and left = how much you have, in the size's unit.
+   left reaching 0 marks it out: true (kept in the list as "Out", not counted by What can I make?). Items without a size work as before. */
+const P_UNITS = {
+  vol: {tsp:1, tbsp:3, cup:48, stick:24, floz:6, ml:0.2029, l:202.88, pt:96, qt:192, gal:768},
+  wt:  {oz:1, lb:16, g:0.035274, kg:35.274},
+  n:   {"":1, dozen:12}
+};
+const P_UNIT_WORDS = {tsp:"tsp tsps teaspoon teaspoons", tbsp:"tbsp tbsps tbs tablespoon tablespoons tbl", cup:"cup cups c", stick:"stick sticks",
+  floz:"fl oz|floz|fluid ounce|fluid ounces|fl. oz|fl oz.", ml:"ml milliliter milliliters millilitre millilitres", l:"l liter liters litre litres",
+  pt:"pt pint pints", qt:"qt quart quarts", gal:"gal gallon gallons", oz:"oz ounce ounces", lb:"lb lbs pound pounds", g:"g gram grams", kg:"kg kilogram kilograms",
+  "":"each ea ct count whole piece pieces", dozen:"dozen doz"};
+const P_UNIT_OF = {};
+Object.entries(P_UNIT_WORDS).forEach(([k, w]) => (w.includes("|") ? w.split("|") : w.split(" ")).forEach(a => P_UNIT_OF[a] = k));
+const P_UNIT_SHOW = {tsp:"tsp", tbsp:"tbsp", cup:["cup","cups"], stick:["stick","sticks"], floz:"fl oz", ml:"ml", l:"L", pt:["pint","pints"], qt:["quart","quarts"], gal:["gallon","gallons"], oz:"oz", lb:["lb","lbs"], g:"g", kg:"kg", "":"", dozen:"dozen"};
+const pKind = u => u in P_UNITS.vol ? "vol" : u in P_UNITS.wt ? "wt" : u in P_UNITS.n ? "n" : "raw";
+/* "5 lb", "1 gallon", "12", "1 dozen", "2 cans", "16.9 fl oz" → {v, u}. Anything else after the number is kept as its own unit ("raw:bag"). */
+function pAmt(str){
+  let t = String(str||"").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!t) return null;
+  if (/^(a|an|one)\b/.test(t)) t = "1" + t.replace(/^(a|an|one)/, "");
+  if (/^(half)\b/.test(t)) t = "0.5" + t.replace(/^half( a| an)?/, "");
+  const m = t.match(NUM_RE); if (!m) return null;
+  let v = tokenVal(m[0]); let rest = t.slice(m[0].length);
+  const fr = rest.match(/^\s+([½⅓⅔¼¾⅛⅜⅝⅞])/); if (fr){ v += UNI[fr[1]]; rest = rest.slice(fr[0].length); }
+  if (!Number.isFinite(v) || v < 0) return null;
+  rest = rest.trim().replace(/^-\s*/, "").replace(/\s*\(.*$/, "");
+  const two = rest.split(" ").slice(0, 2).join(" ").replace(/\.$/, ""), one = rest.split(" ")[0].replace(/\.$/, "");
+  const u = two in P_UNIT_OF ? P_UNIT_OF[two] : one in P_UNIT_OF ? P_UNIT_OF[one] : null;
+  if (u === "dozen") return {v: v * 12, u: ""};
+  if (u != null) return {v, u};
+  if (!one) return {v, u: ""};
+  return {v, u: "raw:" + sing(one.replace(/[^a-z]/g, ""))};
+}
+/* How much of a in b's unit, or null if they can't be compared (cups vs pounds). */
+function pConvert(a, toU){
+  if (!a) return null;
+  if (a.u === toU) return a.v;
+  const ka = pKind(a.u), kb = pKind(toU);
+  if (ka !== kb || ka === "raw") return null;
+  return a.v * P_UNITS[ka][a.u] / P_UNITS[kb][toU];
+}
+function pFmt(v, u){
+  const n = Math.abs(v - Math.round(v)) < 0.02 ? String(Math.round(v)) : (Math.round(v * 100) / 100).toString();
+  let w = u.startsWith("raw:") ? u.slice(4) + (v === 1 ? "" : "s") : P_UNIT_SHOW[u];
+  if (Array.isArray(w)) w = w[Math.abs(v - 1) < 1e-9 ? 0 : 1];
+  return (n + " " + (w || "")).trim();
+}
+const fnum = v => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+const pTracked = i => !!(i && i.size && fnum(i.size.v) > 0);
+const pLeftText = i => i.out ? "Out" : pFmt(fnum(i.left), i.size.u) + " left";
+function pFixQty(i){ if (pTracked(i)) i.qty = Math.max(1, Math.ceil(fnum(i.left) / i.size.v - 1e-6)); }
+/* Add one more package (or the size typed this time) to a tracked item. */
+function pAddSize(hit, size){
+  if (!size){ hit.left = fnum(hit.left) + hit.size.v; }
+  else {
+    const conv = pConvert(size, hit.size.u);
+    if (conv == null){ hit.size = size; hit.left = size.v; delete hit.learn; }   // a different kind of size: start over with the new one
+    else { hit.left = fnum(hit.left) + conv; }
+  }
+  hit.out = false; pFixQty(hit);
+}
+function pantryItemEditor(key){
+  const it = state.pantry.items.find(i => nameKey(i.name) === key); if (!it) return;
+  const ov = $("#confirmOv");
+  const tr = pTracked(it);
+  ov.innerHTML = '<form class="confirm auth-form" id="pItemForm" novalidate aria-labelledby="piT">' +
+    '<h3 id="piT">' + esc(it.name) + '</h3>' +
+    '<p>Set a size and it\'s taken out when you tap \u201cI made this\u201d on a recipe.</p>' +
+    '<div class="field"><label for="pi-size">How big is one when you buy it?</label><input class="inp" id="pi-size" value="' + esc(tr ? pFmt(it.size.v, it.size.u) : "") + '" placeholder="5 lb, 1 gallon, 12, 16 oz, 2 cans…"></div>' +
+    '<div class="field"><label for="pi-left">How much do you have now?</label><input class="inp" id="pi-left" value="' + esc(tr ? (it.out ? "0" : pFmt(fnum(it.left), it.size.u)) : "") + '" placeholder="Leave blank if it\'s ' + (pQty(it) > 1 ? pQty(it) + " full ones" : "full") + '"></div>' +
+    '<div class="err" id="pi-err" role="alert"></div>' +
+    '<div class="acts" style="flex-wrap:wrap">' + (tr ? '<button class="btn ghost sm" type="button" data-pi="untrack" style="margin-right:auto">Stop tracking</button>' : "") +
+      '<button class="btn ghost" type="button" data-pi="close">Cancel</button><button class="btn primary" type="submit">Save</button></div></form>';
+  ov.hidden = false;
+  const close = () => { ov.hidden = true; ov.innerHTML = ""; };
+  ov.onclick = e => {
+    const b = e.target.closest("[data-pi]");
+    if (e.target === ov || (b && b.dataset.pi === "close")) return close();
+    if (b && b.dataset.pi === "untrack"){ delete it.size; delete it.left; delete it.out; delete it.learn; savePantry(); close(); renderPantryIfOpen(); toast(it.name + " isn't tracked any more."); }
+  };
+  $("#pItemForm").onsubmit = e => {
+    e.preventDefault();
+    const err = $("#pi-err");
+    const sizeTxt = $("#pi-size").value.trim(), leftTxt = $("#pi-left").value.trim();
+    if (!sizeTxt){ err.textContent = "Type a size, like 5 lb or 12. (Or Cancel to leave it untracked.)"; return; }
+    const size = pAmt(sizeTxt);
+    if (!size || !size.v){ err.textContent = "Start the size with a number, like 5 lb, 1 gallon or 12."; return; }
+    let left;
+    if (!leftTxt) left = size.v * (tr ? 1 : pQty(it));
+    else {
+      const la = pAmt(/^[\d.\s\/½⅓⅔¼¾⅛⅜⅝⅞]+$/.test(leftTxt) ? leftTxt + " " + (size.u.startsWith("raw:") ? size.u.slice(4) : (P_UNIT_WORDS[size.u] || "").split(/[ |]/)[0]) : leftTxt);
+      left = la ? pConvert(la, size.u) : null;
+      if (left == null){ err.textContent = "That doesn't match the size. Use the same kind of measure, like " + pFmt(1, size.u) + "."; return; }
+    }
+    if (tr && pKind(it.size.u) !== pKind(size.u)) delete it.learn;
+    else if (tr && it.learn && pConvert({v: 1, u: it.size.u}, size.u)){ const f = pConvert({v: 1, u: it.size.u}, size.u); Object.keys(it.learn).forEach(k => it.learn[k] *= f); }
+    it.size = size; it.left = Math.max(0, left); it.out = it.left <= 1e-6; if (it.out) it.left = 0;
+    pFixQty(it); savePantry(); close(); renderPantryIfOpen();
+    toast(it.name + ": " + pLeftText(it) + ".");
+  };
+  setTimeout(() => $("#pi-size").focus(), 30);
+}
+
+/* ---------- I made this: take it out of the pantry ---------- */
+/* For measures that can't be converted (cups of flour vs a 5 lb bag), the amount typed last time is remembered per item:
+   item.learn = {vol|wt|n: size units per tsp / oz / each}. */
+function pLearned(item, n){
+  const k = n && pKind(n.u), r = k && k !== "raw" && item.learn && item.learn[k];
+  return r ? n.v * P_UNITS[k][n.u] * r : null;
+}
+function rowAmount(row){
+  let t = 0; row.learned = false;
+  for (const n of row.needs){
+    let c = n ? pConvert(n, row.item.size.u) : null;
+    if (c == null){ c = pLearned(row.item, n); if (c != null) row.learned = true; }
+    if (c == null) return null; t += c;
+  }
+  return t;
+}
+function madePlan(r){
+  const base = num(r.servings), f = base && state.servings ? state.servings / base : 1;
+  const rows = [], untracked = new Set(), seen = new Map();
+  allIngredients(r).forEach(ing => {
+    if (!String(ing.item||"").trim()) return;
+    const m = pantryMatches(ing).map(e => e.item).filter(Boolean);
+    if (!m.length) return;
+    const tracked = m.filter(pTracked);
+    if (!tracked.length){ m.forEach(i => untracked.add(i.name)); return; }
+    const item = tracked[0];
+    const q = pAmt(ing.qty);
+    const need = q ? {v: q.v * f, u: q.u} : null;
+    const k = nameKey(item.name);
+    if (seen.has(k)){   // same pantry item used twice (e.g. butter in two parts): add them up
+      const row = seen.get(k); row.recipeQty.push(ing.qty ? scaleSmart(ing.qty, f) : "some"); row.needs.push(need);
+      row.amount = rowAmount(row);
+      return;
+    }
+    const row = {item, choices: tracked, label: ingLabel(ing), recipeQty: [ing.qty ? scaleSmart(ing.qty, f) : "some"], needs: [need]};
+    row.amount = rowAmount(row);
+    seen.set(k, row); rows.push(row);
+  });
+  return {rows, untracked: [...untracked]};
+}
+function madeChecklist(r){
+  return new Promise(res => {
+    const plan = madePlan(r);
+    if (!plan.rows.length) return res({go: true, take: []});
+    const ov = $("#confirmOv");
+    const rowHtml = (row, i) => {
+      const it = row.item, u = it.size.u, known = row.amount != null;
+      const one = row.needs.length === 1 && row.needs[0] ? row.needs[0] : null;
+      const amtTxt = !known ? "" : one && !row.learned ? pFmt(one.v, one.u) : pFmt(row.amount, u);
+      return '<li class="mk-row" data-mk="' + i + '"><label class="mk-top"><input type="checkbox" data-mk-on checked' + (it.out ? " disabled" : "") + '><b>' + esc(it.name) + '</b>' +
+        (row.choices.length > 1 ? '<select class="inp mk-pick" aria-label="Which one">' + row.choices.map((c, ci) => '<option value="' + ci + '">' + esc(c.name) + '</option>').join("") + '</select>' : "") + '</label>' +
+        '<div class="mk-line"><span class="hint">Recipe: ' + esc(row.recipeQty.join(" + ")) + ' ' + esc(row.label) + ' · you have ' + esc(pLeftText(it)) + '</span></div>' +
+        (it.out ? '' :
+        '<div class="mk-line">Take out <input class="inp mk-amt" value="' + esc(amtTxt) + '" placeholder="like ' + esc(pFmt(1, u)) + '" aria-label="How much"> ' +
+          (row.learned ? '<div class="mk-ask">About how much you used for that much last time. Change it if it\'s off.</div>' : "") +
+          (known ? "" : '<div class="mk-ask">I can\'t tell how much ' + esc(row.recipeQty.join(" + ")) + ' is out of ' + esc(pFmt(it.size.v, u)) + '. Type it, or pick:' +
+            '<span class="mk-quick">' + [["A little", 0.1], ["¼", 0.25], ["½", 0.5], ["All of it", 1]].map(([t, fr]) => '<button type="button" class="p-sug" data-mkq="' + fr + '">' + t + '</button>').join("") + '</span></div>') +
+        '</div>') + '</li>';
+    };
+    ov.innerHTML = '<form class="confirm auth-form made-form" id="madeForm" novalidate aria-labelledby="mkT">' +
+      '<h3 id="mkT">Take it out of your pantry?</h3>' +
+      '<p>For ' + esc(r.title || "this recipe") + (state.servings && num(r.servings) && state.servings !== num(r.servings) ? " (" + state.servings + " servings)" : "") + '. Fix any amount or untick what you didn\'t use.</p>' +
+      '<ul class="mk-list">' + plan.rows.map(rowHtml).join("") + '</ul>' +
+      (plan.untracked.length ? '<p class="hint">Not tracked, so nothing taken: ' + esc(plan.untracked.join(", ")) + '. Tap one in your pantry to give it a size.</p>' : "") +
+      '<div class="err" id="mk-err" role="alert"></div>' +
+      '<div class="acts" style="flex-wrap:wrap"><button class="btn ghost" type="button" data-mk-btn="cancel">Cancel</button><button class="btn ghost" type="button" data-mk-btn="skip">Just log it</button><button class="btn primary" type="submit">Take it out</button></div></form>';
+    ov.hidden = false;
+    const done = v => { ov.hidden = true; ov.innerHTML = ""; res(v); };
+    ov.oninput = e => { if (e.target.classList.contains("mk-amt")) e.target.dataset.typed = "1"; };
+    ov.onchange = e => {
+      const sel = e.target.closest(".mk-pick"); if (!sel) return;
+      const li = sel.closest("[data-mk]"), i = +li.dataset.mk, row = plan.rows[i];
+      const ci = +sel.value; row.item = row.choices[ci];
+      row.amount = rowAmount(row);   // recompute for the newly picked item
+      const tmp = document.createElement("div"); tmp.innerHTML = rowHtml(row, i);
+      const fresh = tmp.firstChild; fresh.querySelector(".mk-pick").value = String(ci); li.replaceWith(fresh);
+    };
+    ov.onclick = e => {
+      if (e.target === ov) return done({go: false});
+      const q = e.target.closest("[data-mkq]");
+      if (q){ const li = q.closest("[data-mk]"), row = plan.rows[+li.dataset.mk]; const v = fnum(row.item.left) * +q.dataset.mkq; const inp = li.querySelector(".mk-amt"); inp.value = pFmt(v, row.item.size.u); delete inp.dataset.typed; return; }
+      const b = e.target.closest("[data-mk-btn]"); if (!b) return;
+      if (b.dataset.mkBtn === "cancel") done({go: false}); else done({go: true, take: []});
+    };
+    $("#madeForm").onsubmit = e => {
+      e.preventDefault();
+      const take = [];
+      for (const li of ov.querySelectorAll("[data-mk]")){
+        const row = plan.rows[+li.dataset.mk];
+        const on = li.querySelector("[data-mk-on]"), inp = li.querySelector(".mk-amt");
+        if (!on.checked || !inp) continue;
+        const txt = inp.value.trim();
+        if (!txt){ $("#mk-err").textContent = "How much " + row.item.name + " did you use? Type an amount, pick one, or untick it."; inp.focus(); return; }
+        let v = null;
+        if (/^[\d.\s\/½⅓⅔¼¾⅛⅜⅝⅞]+$/.test(txt)){ const m = txt.match(NUM_RE); v = m ? tokenVal(txt.replace(/\s+(?=[½⅓⅔¼¾⅛⅜⅝⅞])/, "")) : null; }
+        else v = pConvert(pAmt(txt), row.item.size.u);
+        if (v == null || !Number.isFinite(v) || v < 0){ $("#mk-err").textContent = "Couldn't read the amount for " + row.item.name + ". Type a number in " + (pFmt(2, row.item.size.u).replace(/^\S+\s?/, "") || "items") + "."; inp.focus(); return; }
+        // Remember a typed amount for measures that don't convert, so next time it's filled in.
+        if (inp.dataset.typed && row.needs.length === 1 && row.needs[0] && pConvert(row.needs[0], row.item.size.u) == null){
+          const n = row.needs[0], k = pKind(n.u);
+          if (k !== "raw" && v > 0){ row.item.learn = Object.assign({}, row.item.learn, {[k]: v / (n.v * P_UNITS[k][n.u])}); }
+        }
+        take.push({item: row.item, v});
+      }
+      done({go: true, take});
+    };
+  });
+}
+function takeFromPantry(take){
+  const outNow = [];
+  take.forEach(({item, v}) => {
+    if (!v) return;
+    item.left = Math.max(0, fnum(item.left) - v);
+    if (item.left <= 1e-6){ item.left = 0; item.out = true; outNow.push(item.name); }
+    pFixQty(item);
+  });
+  if (take.length) savePantry();
+  return outNow;
+}
+
 function recipeSuggestions(){
   const have = new Set(state.pantry.items.map(i => pKey(i.name)));
   const count = new Map();
@@ -1323,6 +1578,7 @@ function renderPantry(){
       '<div><h2 id="pTitle">What\'s in my pantry</h2><p class="hint" style="margin:6px 0 0">' + esc(syncNote()) + '</p></div>' +
       '<div><form class="p-add" id="pantryAdd" autocomplete="off">' +
         '<input class="inp" id="p-name" list="pList" placeholder="Add an item, like cumin or eggs" aria-label="Pantry item">' +
+        '<input class="inp" id="p-size" placeholder="Size: 5 lb, 12…" aria-label="How big is it? (optional)" title="How big is it? Optional. With a size, I made this takes it out.">' +
         '<select class="inp" id="p-cat" aria-label="Where it goes"><option value="">Sort it for me</option>' + P_CATS.map(c => '<option>' + esc(c) + '</option>').join("") + '</select>' +
         '<button class="btn primary" type="submit">Add</button></form><p class="hint" id="p-hint" aria-live="polite" style="margin:6px 0 0;min-height:1.2em"></p></div>' +
       '<datalist id="pList">' + allSug.map(n => '<option value="' + esc(n) + '"></option>').join("") + '</datalist>' +
@@ -1330,10 +1586,13 @@ function renderPantry(){
         '<div hidden class="field bulk-box" style="margin-top:8px"><textarea class="inp" id="p-bulk" rows="4" aria-label="Paste pantry items" placeholder="One per line or separated by commas, like:&#10;cumin, paprika, oregano&#10;eggs"></textarea><div><button class="btn yolk sm" type="button" data-act="p-bulk-add">Add these</button></div></div></div>' +
       (fromRecipes.length ? '<div class="field"><span class="lab">Used in your recipes <span class="hint">Tap anything you have.</span></span><div class="p-chips">' + fromRecipes.map(sugChip).join("") + '</div></div>' : "") +
       (staples.length ? '<div class="field"><span class="lab">Common staples</span><div class="p-chips">' + staples.map(sugChip).join("") + '</div></div>' : "") +
+      '<p class="hint" style="margin:-6px 0 0">Give something a size (when you add it, or tap its name) and <b>I made this</b> takes out what the recipe used.</p>' +
       '<label class="p-check"><input type="checkbox" id="p-basics"' + (state.pantry.basics ? " checked" : "") + '> Always count salt, pepper and water as things I have</label>' +
       '<div style="display:flex;flex-direction:column;gap:18px;border-top:2px solid var(--line);padding-top:18px">' +
         (groups.length ? groups.map(g => '<div class="p-group"><h3>' + esc(g.cat) + ' <span class="hint">(' + g.list.length + ')</span></h3><div class="p-chips">' +
-          g.list.map(i => '<span class="p-item">' + esc(i.name) + (pQty(i) > 1 ? '<span class="p-qty">×' + pQty(i) + '</span>' : "") + '<button type="button" data-pdel="' + esc(nameKey(i.name)) + '" aria-label="' + (pQty(i) > 1 ? "Remove one " : "Remove ") + esc(i.name) + '" title="' + (pQty(i) > 1 ? "Remove one" : "Remove") + '">' + (pQty(i) > 1 ? "−" : "×") + '</button></span>').join("") + '</div></div>').join("")
+          g.list.map(i => '<span class="p-item' + (i.out ? " out" : "") + '"><button type="button" class="p-name" data-pedit="' + esc(nameKey(i.name)) + '" title="Set how much you have">' + esc(i.name) + '</button>' +
+            (pTracked(i) ? '<span class="p-left' + (i.out ? " out" : "") + '">' + esc(pLeftText(i)) + '</span>' : pQty(i) > 1 ? '<span class="p-qty">×' + pQty(i) + '</span>' : "") +
+            (i.out ? '<button type="button" class="p-more" data-padd="' + esc(i.name) + '" title="Bought more">+</button>' : "") + '<button type="button" data-pdel="' + esc(nameKey(i.name)) + '" aria-label="' + (pQty(i) > 1 ? "Remove one " : "Remove ") + esc(i.name) + '" title="' + (pQty(i) > 1 ? "Remove one" : "Remove") + '">' + (pQty(i) > 1 ? "−" : "×") + '</button></span>').join("") + '</div></div>').join("")
         : '<p class="hint" style="margin:0">Your pantry is empty. Add what you have on hand, then tap <b>What can I make?</b> to see which recipes you can cook today.</p>') +
       '</div>' +
       (items.length ? '<div class="form-foot"><span class="hint" style="margin-right:auto;align-self:center">' + items.length + (items.length === 1 ? " item" : " items") + '</span><button class="btn sm ghost" type="button" data-act="p-clear">Empty the pantry</button></div>' : "") +
@@ -1574,18 +1833,106 @@ function blankRecipe(){
   return {id:newId(), title:"", meal: state.meal !== "all" ? state.meal : "dinner", prepMin:"", cookMin:"", servings:"", ingredients:[{qty:"",item:"",url:""}], steps:[], equipment:[], tags:[], notes:"", sourceUrl:"", sourceName:"", fav:false, publishedBy: lastName()};
 }
 function lastName(){ try{ return localStorage.getItem("recipe-box-name") || ""; }catch(e){ return ""; } }
-function openForm(r){
+/* Unsaved recipes are kept on this device (Nov 9, 2026: a new recipe kept vanishing before it was saved).
+   localStorage "recipe-box-drafts" = {key: {at, base, data, paste, photo}}; key "new" or the recipe id. */
+const DRAFTS_KEY = "recipe-box-drafts";
+function loadDrafts(){
+  try{
+    const all = JSON.parse(localStorage.getItem(DRAFTS_KEY) || "{}") || {};
+    const old = Date.now() - 30 * 864e5;
+    Object.keys(all).forEach(k => { if (!all[k] || all[k].at < old) delete all[k]; });
+    return all;
+  }catch(e){ return {}; }
+}
+function writeDrafts(all){
+  try{ localStorage.setItem(DRAFTS_KEY, JSON.stringify(all)); return true; }
+  catch(e){
+    // Probably full: try again without the photos.
+    try{ Object.values(all).forEach(d => { delete d.photo; }); localStorage.setItem(DRAFTS_KEY, JSON.stringify(all)); return true; }catch(e2){ return false; }
+  }
+}
+function draftKey(){ return draft ? (draft._isNew ? "new" : draft.id) : ""; }
+function draftCore(d){
+  const c = {};
+  ["title","meal","ingredients","steps","equipment","mainName","parts","sourceUrl","sourceName","tags","notes","publishedBy"].forEach(k => c[k] = d[k] == null ? "" : d[k]);
+  ["prepMin","cookMin","servings"].forEach(k => c[k] = d[k] == null ? "" : String(d[k]));
+  c.rating = num(d.rating);
+  c.ingredients = (c.ingredients || []).filter(i => i.item || i.qty || i.url);
+  c.parts = (c.parts || []).map(p => ({name: p.name, steps: p.steps, ingredients: (p.ingredients || []).filter(i => i.item || i.qty || i.url)}));
+  return JSON.stringify(c);
+}
+function pasteText(){ const t = $("#f-paste"); return t ? t.value : (draft && draft._paste) || ""; }
+function draftChanged(){
+  if (!draft) return false;
+  return draftCore(draft) !== draft._orig || !!pasteText().trim() || !!draft._newBlob;
+}
+// Saves what's on the form right now. Returns true when something unsaved is being kept.
+function keepDraft(){
+  if (!draft) return false;
+  syncDraft();
+  draft._paste = pasteText();
+  const all = loadDrafts(), key = draftKey();
+  if (!draftChanged()){
+    if (all[key]){ delete all[key]; writeDrafts(all); }
+    return false;
+  }
+  const data = {};
+  Object.keys(draft).forEach(k => { if (k[0] !== "_") data[k] = draft[k]; });
+  const prev = all[key];
+  all[key] = {at: Date.now(), base: draft._base || 0, data, paste: draft._paste,
+    photo: draft._newBlob ? (draft._photoData || (prev && prev.photo) || "") : ""};
+  writeDrafts(all);
+  return true;
+}
+function dropDraft(key){ const all = loadDrafts(); if (all[key]){ delete all[key]; writeDrafts(all); } }
+let draftTimer = 0;
+function keepDraftSoon(){ clearTimeout(draftTimer); draftTimer = setTimeout(keepDraft, 400); }
+async function photoForDraft(blob){
+  try{ const small = await shrinkImage(blob, 900, 0.7); return await blobToDataUrl(small); }catch(e){ return ""; }
+}
+async function dataUrlToBlob(u){ const r = await fetch(u); return await r.blob(); }
+
+function openForm(r, fresh){
+  clearTimeout(draftTimer);
   draft = JSON.parse(JSON.stringify(r || blankRecipe()));
   draft.mainName = draft.mainName || "";
   draft.parts = (draft.parts || []).map(p => ({name: p.name || "", ingredients: (p.ingredients||[]).length ? p.ingredients : [blankIng()], steps: p.steps || []}));
   if (!(draft.ingredients||[]).length) draft.ingredients = [blankIng()];
   draft._isNew = !r; draft._newBlob = null; draft._preview = ""; draft._removePhoto = false; draft._newVideo = null; draft._videoPreview = ""; draft._removeVideo = false;
+  draft._base = r ? (r.updatedAt || 0) : 0; draft._paste = ""; draft._restoredAt = 0;
+  draft._orig = draftCore(draft);
+  const key = r ? r.id : "new";
+  const kept = fresh ? null : loadDrafts()[key];
+  if (fresh) dropDraft(key);
+  // Pick up an unsaved draft (for an edit, only if the recipe hasn't been saved since).
+  if (kept && kept.data && (!r || (kept.base || 0) === (r.updatedAt || 0))){
+    Object.assign(draft, JSON.parse(JSON.stringify(kept.data)));
+    if (r) draft.id = r.id;
+    draft.parts = (draft.parts || []).map(p => ({name: p.name || "", ingredients: (p.ingredients||[]).length ? p.ingredients : [blankIng()], steps: p.steps || []}));
+    if (!(draft.ingredients||[]).length) draft.ingredients = [blankIng()];
+    draft._paste = kept.paste || "";
+    draft._restoredAt = kept.at;
+    if (kept.photo){
+      draft._photoData = kept.photo;
+      const d0 = draft;
+      dataUrlToBlob(kept.photo).then(b => {
+        if (draft !== d0 || draft._newBlob) return;
+        syncDraft(); draft._paste = pasteText();
+        draft._newBlob = b; draft._preview = URL.createObjectURL(b); draft._removePhoto = false; renderForm();
+      }).catch(() => {});
+    }
+  } else if (kept && r) dropDraft(key);
   renderForm();
   $("#formOv").hidden = false;
   document.body.style.overflow = "hidden";
   setTimeout(() => { const t = $("#f-title"); if (t) t.focus(); }, 50);
 }
-function closeForm(){
+function closeForm(saved){
+  clearTimeout(draftTimer);
+  if (draft){
+    if (saved) dropDraft(draftKey());
+    else if (keepDraft()) toast(draft._isNew ? "Your unsaved recipe is kept on this device. Tap New recipe to pick up where you left off." : "Your changes are kept on this device. Tap Edit to pick up where you left off.");
+  }
   if (draft && draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview);
   if (draft && draft._videoPreview) URL.revokeObjectURL(draft._videoPreview);
   draft = null; $("#formOv").hidden = true;
@@ -1631,9 +1978,10 @@ function renderForm(){
     '<div class="acts"><button class="btn primary sm" type="button" data-act="save">' + (d._isNew ? "Add to recipe box" : "Save changes") + '</button></div></div>' +
     '<form class="form" id="recipeForm" novalidate>' +
       '<h2 id="fTitle">' + (d._isNew ? "New recipe" : "Edit recipe") + '</h2>' +
-      (d._isNew ? '<details class="paste"><summary>Paste a whole recipe from your Google Doc</summary><div class="in">' +
+      (d._restoredAt ? '<div class="banner draft-note" role="status"><span>Picked up where you left off (' + esc(draftWhen(d._restoredAt)) + '). Nothing is in the recipe box until you tap ' + (d._isNew ? "Add to recipe box" : "Save changes") + '.</span><button class="btn sm ghost" type="button" data-act="draft-fresh">Start over</button></div>' : "") +
+      (d._isNew ? '<details class="paste"' + (d._paste ? " open" : "") + '><summary>Paste a whole recipe from your Google Doc</summary><div class="in">' +
         '<p class="hint" style="margin:0">Copy a recipe from your doc and paste it here. Put the title first, then lines that say “Ingredients” and “Directions”. A link anywhere at the top becomes the source. If it has more than one part, put a line like “For the sauce:” or “Crust:” before that part\'s ingredients and steps. A line that says “Equipment” starts the equipment list.</p>' +
-        '<textarea class="inp" id="f-paste" rows="8" placeholder="Grandma\'s Chili&#10;Serves 6&#10;https://example.com/chili&#10;&#10;Ingredients&#10;2 lbs ground beef&#10;1 can kidney beans&#10;&#10;Directions&#10;1. Brown the beef.&#10;2. Add everything else and simmer."></textarea>' +
+        '<textarea class="inp" id="f-paste" rows="8" placeholder="Grandma\'s Chili&#10;Serves 6&#10;https://example.com/chili&#10;&#10;Ingredients&#10;2 lbs ground beef&#10;1 can kidney beans&#10;&#10;Directions&#10;1. Brown the beef.&#10;2. Add everything else and simmer.">' + esc(d._paste || "") + '</textarea>' +
         '<div><button class="btn yolk sm" type="button" data-act="parse">Fill in the form</button></div></div></details>' : "") +
       '<div class="field"><label for="f-title">Recipe name</label><input class="inp" id="f-title" value="' + esc(d.title) + '" placeholder="Sunday Morning Waffles" required></div>' +
       '<div class="field"><span class="lab">Meal</span><div class="seg" role="radiogroup" aria-label="Meal">' +
@@ -1678,6 +2026,14 @@ function renderForm(){
       '<div class="form-foot"><button class="btn ghost" type="button" data-act="fclose">Cancel</button><button class="btn primary" type="submit" id="saveBtn">' + (d._isNew ? "Add to recipe box" : "Save changes") + '</button></div>' +
     '</form>';
 }
+function draftWhen(t){
+  const d = new Date(t), now = new Date();
+  const time = d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  if (d.toDateString() === now.toDateString()) return "today at " + time;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return "yesterday at " + time;
+  return d.toLocaleDateString([], {month: "short", day: "numeric"}) + " at " + time;
+}
 function syncDraft(){
   const f = $("#formSheet");
   if (!f || !draft) return;
@@ -1705,6 +2061,7 @@ function syncDraft(){
   draft.notes = $("#f-notes", f).value.trim();
   draft.publishedBy = $("#f-by", f).value.trim();
   draft.rating = num($("#f-rating", f).value);
+  const pt = $("#f-paste", f); if (pt) draft._paste = pt.value;
 }
 
 async function shrinkImage(file, max, q){
@@ -1732,6 +2089,8 @@ async function takeFile(file){
     if (draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview);
     draft._newBlob = blob; draft._preview = URL.createObjectURL(blob); draft._removePhoto = false;
     renderForm();
+    const d0 = draft; draft._photoData = "";
+    photoForDraft(blob).then(u => { if (draft === d0 && draft._newBlob === blob){ draft._photoData = u; keepDraft(); } });
   }catch(e){ toast("Couldn't read that photo. Try saving it as a JPG or PNG first."); }
 }
 
@@ -1793,10 +2152,11 @@ async function saveForm(){
     if (out.publishedBy){ try{ localStorage.setItem("recipe-box-name", out.publishedBy); }catch(e){} }
     if (oldPhotoPath && oldPhotoPath !== out.photoPath) removeFile(oldPhotoPath);
     const wasNew = draft._isNew;
-    closeForm();
+    closeForm(true);
     toast(wasNew ? "Added to your recipe box." : "Saved.");
     openDetail(out.id);
   }catch(e){
+    keepDraft();
     btn.disabled = false; btn.textContent = draft && draft._isNew ? "Add to recipe box" : "Save changes";
     const code = e && e.code;
     err.textContent = code === "too_large" ? "That file is too big. Try a smaller one."
@@ -1839,6 +2199,8 @@ document.addEventListener("click", async e => {
     else if (w === "new"){ if (state.mode === "db" && !state.session) openSignIn("in"); else openForm(null); }
     return;
   }
+  const pedit = t.closest("[data-pedit]");
+  if (pedit){ pantryItemEditor(pedit.dataset.pedit); return; }
   const pdel = t.closest("[data-pdel]");
   if (pdel){ removeFromPantry(pdel.dataset.pdel); renderPantryIfOpen(); return; }
   const fav = t.closest("[data-fav]");
@@ -1872,11 +2234,17 @@ document.addEventListener("click", async e => {
     case "made": {
       if (!r) break;
       if (state.mode === "db" && !state.session){ openSignIn("in"); break; }
+      const pick = await madeChecklist(r);
+      if (!pick.go) break;
+      const outNow = takeFromPantry(pick.take);
+      const took = pick.take.filter(x => x.v).length;
+      const pantryNote = took ? " Took " + took + (took === 1 ? " thing" : " things") + " out of your pantry" + (outNow.length ? "; now out of " + orList(outNow) : "") + "." : "";
       try{
         if (state.mode === "db"){ const { error } = await sb.rpc("log_made", {rid: r.id}); if (error) throw error; await refresh(); }
         else { Object.assign(r, {madeCount: num(r.madeCount) + 1, lastMade: Date.now()}); saveLocal(); render(); renderDetail(); }
-        toast("Nice! Logged it. Your picks will learn from this.");
-      }catch(err){ toast(writeError(err)); }
+        toast("Nice! Logged it." + (pantryNote || " Your picks will learn from this."));
+      }catch(err){ toast(writeError(err) + pantryNote); }
+      renderPantryIfOpen();
       break;
     }
     case "edit": if (r) openForm(r); break;
@@ -1906,6 +2274,13 @@ document.addEventListener("click", async e => {
       break;
     }
     case "fclose": closeForm(); break;
+    case "draft-fresh": {
+      if (!await confirmBox("Start over?", "This clears what you typed before and gives you " + (draft._isNew ? "a blank recipe." : "the recipe as it was last saved."), "Start over")) break;
+      const r = draft._isNew ? null : state.recipes.find(x => x.id === draft.id);
+      if (draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview);
+      dropDraft(draftKey()); draft = null;
+      openForm(r || null, true); break;
+    }
     case "to-total": { const el = $("#totalList"); if (el) el.scrollIntoView({behavior:"smooth", block:"start"}); break; }
     case "pclose": closePantry(); break;
     case "nclose": closeNews(); break;
@@ -1931,7 +2306,7 @@ document.addEventListener("click", async e => {
     case "pick": $("#fileInp").click(); break;
     case "pick-video": $("#vidInp").click(); break;
     case "rm-video": syncDraft(); if (draft._videoPreview) URL.revokeObjectURL(draft._videoPreview); draft._newVideo = null; draft._videoPreview = ""; draft._removeVideo = true; renderForm(); break;
-    case "rm-photo": syncDraft(); if (draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview); draft._newBlob = null; draft._preview = ""; draft._removePhoto = true; renderForm(); break;
+    case "rm-photo": syncDraft(); if (draft._preview && draft._preview.startsWith("blob:")) URL.revokeObjectURL(draft._preview); draft._newBlob = null; draft._photoData = ""; draft._preview = ""; draft._removePhoto = true; renderForm(); break;
     case "add-ing": {
       const pi = +act.closest(".ing-block").dataset.part;
       syncDraft(); (pi < 0 ? draft.ingredients : draft.parts[pi].ingredients).push(blankIng()); renderForm();
@@ -2000,16 +2375,23 @@ document.addEventListener("submit", e => {
     e.preventDefault();
     const name = $("#p-name").value.trim(); if (!name) return;
     const cat = $("#p-cat").value;
-    const res = addToPantry([name], cat);
+    const sizeTxt = ($("#p-size") || {}).value ? $("#p-size").value.trim() : "";
+    const size = sizeTxt ? pAmt(sizeTxt) : null;
+    if (sizeTxt && (!size || !size.v)){ $("#p-hint").textContent = "Start the size with a number, like 5 lb, 1 gallon or 12."; $("#p-size").focus(); return; }
+    const res = addToPantry([name], cat, size);
     if (res.count){ renderPantry(); toast(pantryMsg(res)); }
     const n = $("#p-name"); if (n){ n.value = ""; n.focus(); }
+    const sz = $("#p-size"); if (sz) sz.value = "";
   }
 });
 document.addEventListener("input", e => {
   if (e.target.id !== "p-name") return;
   const hint = $("#p-hint"); if (!hint) return;
   const hit = findPantry(e.target.value);
-  hint.textContent = hit ? "You already have " + hit.name + (pQty(hit) > 1 ? " ×" + pQty(hit) : "") + ". Adding it makes ×" + (pQty(hit) + 1) + "." : "";
+  hint.textContent = !hit ? "" : hit.out ? hit.name + " is out. Adding it fills it back up" + (pTracked(hit) ? " (" + pFmt(hit.size.v, hit.size.u) + ")" : "") + "."
+    : pTracked(hit) ? "You have " + hit.name + ": " + pLeftText(hit) + ". Adding one adds " + pFmt(hit.size.v, hit.size.u) + " (or type a different size)."
+    : "You already have " + hit.name + (pQty(hit) > 1 ? " ×" + pQty(hit) : "") + ". Adding it makes ×" + (pQty(hit) + 1) + ".";
+  const sz = $("#p-size"); if (sz && hit && pTracked(hit) && !sz.value) sz.placeholder = pFmt(hit.size.v, hit.size.u); else if (sz) sz.placeholder = "Size: 5 lb, 12…";
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape"){
@@ -2030,7 +2412,13 @@ document.addEventListener("error", e => {
 }, true);
 
 $("#detailOv").addEventListener("click", e => { if (e.target.id === "detailOv") closeDetail(); });
-$("#formOv").addEventListener("click", e => { if (e.target.id === "formOv") closeForm(); });
+let formDownOnBackdrop = false;
+$("#formOv").addEventListener("pointerdown", e => { formDownOnBackdrop = e.target.id === "formOv"; });
+$("#formOv").addEventListener("click", e => { if (e.target.id === "formOv" && formDownOnBackdrop) closeForm(); formDownOnBackdrop = false; });
+$("#formSheet").addEventListener("input", keepDraftSoon);
+$("#formSheet").addEventListener("change", keepDraftSoon);
+window.addEventListener("pagehide", () => { if (draft) keepDraft(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && draft) keepDraft(); });
 $("#pantryOv").addEventListener("click", e => { if (e.target.id === "pantryOv") closePantry(); });
 $("#newsOv").addEventListener("click", e => { if (e.target.id === "newsOv") closeNews(); });
 $("#newsBtn").addEventListener("click", openNews);
