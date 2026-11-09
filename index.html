@@ -1068,7 +1068,8 @@ function renderRecs(){
 const CHANGES = [
   {date: "2026-11-09", items: [
     {title: "Your new recipe won't disappear", text: "What you type into a new recipe (or an edit) is now kept on this device as you go. If the form closes before you save, or the page reloads, tap New recipe (or Edit) and it picks up where you left off, photo and pasted text included. Dragging out of a box no longer closes the form by accident.", show: "new"},
-    {title: "Your pantry keeps track of how much you have", text: "Add a size when you put something in your pantry (5 lb, 1 gallon, 12), or tap an item's name to set one. When you tap \u201cI made this\u201d, it shows what the recipe used so you can fix any amount, then takes it out. When something runs out it stays in the list marked Out. Tap + when you buy more.", show: "pantry"}
+    {title: "Your pantry keeps track of how much you have", text: "Add a size when you put something in your pantry (5 lb, 1 gallon, 12), or tap an item's name to set one. When you tap \u201cI made this\u201d, it shows what the recipe used so you can fix any amount, then takes it out. When something runs out it stays in the list marked Out. Tap + when you buy more.", show: "pantry"},
+    {title: "Small fixes", text: "The pantry no longer counts a different food that just shares a word, like Garlic Alfredo for cloves of garlic.", show: "pantry"}
   ]},
   {date: "2026-11-08", items: [
     {title: "Tidier What can I make?", text: "The cards are easier to read: what you still need is listed on its own, and \u201cUse any one\u201d shows the pantry items you can pick from. The same ingredient no longer shows twice.", show: "cook"},
@@ -1178,6 +1179,8 @@ function pantryIndex(){
    chicken broth isn't chicken. ONE_WORD ones only count when the shorter name is a single word ("butter" vs
    "cowboy butter seasoning"), so "Kinder's The Blend" can still match "Kinder's Seasoning: The Blend". */
 const P_DIFFERENT = new Set("peanut almond cashew hazelnut apple cocoa coconut chocolate cowboy powder broth stock bouillon extract paste sauce juice cream bell flake garlic onion".split(" "));
+/* Last words that only say what form or cut it comes in, so "parmesan cheese" still counts for "parmesan" and "chicken breast" for "chicken". */
+const P_HEAD_OK = new Set("cheese breast thigh wing drumstick leg tenderloin tender fillet filet cutlet chop loin clove bulb head leaf sprig stalk bunch can jar bag box pack package bottle block wedge stick".split(" "));
 const P_DIFFERENT_ONE_WORD = new Set("seasoning blend rub mix spice salt dressing".split(" "));
 function matchScore(t, p){
   const extraOk = (extra, shorter) => !extra.some(w => P_DIFFERENT.has(w) || (shorter.length < 2 && P_DIFFERENT_ONE_WORD.has(w)));
@@ -1188,6 +1191,9 @@ function matchScore(t, p){
   }
   if (t.every(w => p.includes(w))){                                        // pantry is more specific ("olive oil" for "oil")
     const extra = p.filter(w => !t.includes(w));
+    // The pantry item's main word has to be the same food: "olive oil" is oil, but "garlic alfredo" is alfredo, not garlic.
+    const head = p[p.length - 1];
+    if (!t.includes(head) && !P_HEAD_OK.has(head)) return -1;
     return extraOk(extra, t) ? 100 - extra.length : -1;
   }
   return -1;
